@@ -329,7 +329,7 @@ select.field-input { appearance: none; cursor: pointer; }
 .context-menu {
   position: fixed; background: var(--bg-elevated); border: 1px solid var(--border-medium);
   border-radius: var(--radius-lg); padding: 4px; box-shadow: var(--shadow-lg);
-  z-index: 2000; min-width: 180px;
+  z-index: 10001; min-width: 190px; max-height: 70vh; overflow-y: auto;
 }
 .context-menu-item {
   display: flex; align-items: center; gap: 8px; padding: 7px 10px;

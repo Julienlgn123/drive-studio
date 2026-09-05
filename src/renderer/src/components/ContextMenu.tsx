@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 
 export interface MenuItem {
   label: string
@@ -16,25 +16,54 @@ interface Props {
 }
 
 export default function ContextMenu({ x, y, items, onClose }: Props): JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ left: x, top: y })
+
+  // Positionne le menu dans les limites de la fenêtre une fois sa taille connue.
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const { width, height } = el.getBoundingClientRect()
+    const left = Math.max(8, Math.min(x, window.innerWidth - width - 8))
+    const top = Math.max(8, Math.min(y, window.innerHeight - height - 8))
+    setPos({ left, top })
+  }, [x, y, items.length])
+
+  // Ferme au clic / clic droit / molette / Échap à l'extérieur.
+  // Le listener est attaché au tick suivant pour ne pas capter le clic
+  // qui vient d'ouvrir le menu.
   useEffect(() => {
-    function close(): void {
+    function onPointerDown(e: MouseEvent): void {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    function onKey(e: KeyboardEvent): void {
+      if (e.key === 'Escape') onClose()
+    }
+    function onScroll(): void {
       onClose()
     }
-    window.addEventListener('click', close)
-    window.addEventListener('contextmenu', close)
-    window.addEventListener('resize', close)
+    const id = window.setTimeout(() => {
+      window.addEventListener('mousedown', onPointerDown, true)
+      window.addEventListener('contextmenu', onPointerDown, true)
+      window.addEventListener('keydown', onKey)
+      window.addEventListener('resize', onScroll)
+    }, 0)
     return () => {
-      window.removeEventListener('click', close)
-      window.removeEventListener('contextmenu', close)
-      window.removeEventListener('resize', close)
+      window.clearTimeout(id)
+      window.removeEventListener('mousedown', onPointerDown, true)
+      window.removeEventListener('contextmenu', onPointerDown, true)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('resize', onScroll)
     }
   }, [onClose])
 
-  const left = Math.min(x, window.innerWidth - 210)
-  const top = Math.min(y, window.innerHeight - items.length * 34 - 16)
-
   return (
-    <div className="context-menu" style={{ left, top }} onClick={(e) => e.stopPropagation()}>
+    <div
+      ref={ref}
+      className="context-menu"
+      style={{ left: pos.left, top: pos.top }}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
       {items.map((item, i) => (
         <button
           key={i}
@@ -43,8 +72,8 @@ export default function ContextMenu({ x, y, items, onClose }: Props): JSX.Elemen
           style={item.disabled ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
           onClick={() => {
             if (item.disabled) return
-            item.onClick()
             onClose()
+            item.onClick()
           }}
         >
           {item.icon}
