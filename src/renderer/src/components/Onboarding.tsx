@@ -83,20 +83,48 @@ export default function Onboarding(): JSX.Element {
               <UserPlus size={18} style={{ color: 'var(--accent-light)' }} /> Ajouter ton premier compte Drive
             </div>
             <div className="col" style={{ gap: 8, fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-              <p>Quand tu cliques sur le bouton ci-dessous :</p>
+              <div
+                className="row"
+                style={{
+                  gap: 8,
+                  alignItems: 'flex-start',
+                  padding: '9px 11px',
+                  background: 'var(--warning-dim)',
+                  border: '1px solid rgba(251,191,36,0.3)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--warning)'
+                }}
+              >
+                <span>⚠️</span>
+                <span>
+                  <b>Avant de cliquer</b> : chaque adresse Google que tu veux relier doit être
+                  ajoutée en <b>« utilisateur de test »</b> dans l'écran de consentement OAuth.
+                  Sinon Google renvoie « Accès bloqué · erreur 403 ».
+                  <button
+                    className="btn btn-sm btn-secondary"
+                    style={{ marginTop: 6 }}
+                    onClick={() =>
+                      window.api.shell.openExternal('https://console.cloud.google.com/auth/audience')
+                    }
+                  >
+                    Ouvrir la page « Audience » <ArrowRight size={12} />
+                  </button>
+                </span>
+              </div>
+              <p>Ensuite, quand tu cliques sur le bouton :</p>
               <ol style={{ paddingLeft: 18 }}>
-                <li>Ton navigateur s'ouvre sur la page de connexion Google.</li>
-                <li>Choisis le compte à relier et accepte l'accès à Drive.</li>
+                <li>Ton navigateur s'ouvre sur la connexion Google.</li>
+                <li>Choisis le compte (celui déclaré comme testeur) et accepte l'accès à Drive.</li>
+                <li>
+                  Message « Google n'a pas validé cette application » → « Paramètres avancés » →
+                  « Accéder à … » : c'est ton propre projet en mode test.
+                </li>
                 <li>
                   Une page « <b>Compte Google lié — vous pouvez fermer cet onglet</b> » s'affiche
-                  (adresse en <span className="mono">127.0.0.1</span>, c'est normal et local).
+                  (adresse <span className="mono">127.0.0.1</span>, normal et local).
                 </li>
                 <li>Reviens ici : le compte apparaît automatiquement.</li>
               </ol>
-              <p className="muted">
-                Message « Google n'a pas validé cette application » ? Clique sur « Paramètres
-                avancés » → « Accéder à … » : c'est ton propre projet, en mode test.
-              </p>
             </div>
             <button className="btn btn-primary" style={{ alignSelf: 'flex-start' }} onClick={addAccount} disabled={adding}>
               {adding ? (
@@ -162,14 +190,18 @@ export default function Onboarding(): JSX.Element {
 
 export function mapAuthError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err)
-  if (/access_denied|refusé/i.test(msg))
-    return "Autorisation refusée dans le navigateur. Réessaie et accepte l'accès à Drive."
-  if (/refresh_token/i.test(msg))
-    return "Google n'a pas renvoyé de jeton durable. Va sur myaccount.google.com → Sécurité → Accès tiers, retire l'app, puis relie le compte."
   if (/invalid_client|unauthorized_client/i.test(msg))
     return 'Client ID ou Secret invalide. Vérifie-les dans Réglages (type « Application de bureau »).'
-  if (/consent|verif|test/i.test(msg))
-    return "Ce compte n'est pas autorisé : ajoute son adresse en « utilisateur de test » dans l'écran de consentement OAuth."
+  if (/refresh_token/i.test(msg))
+    return "Google n'a pas renvoyé de jeton durable. Va sur myaccount.google.com/permissions, retire l'app, puis relie le compte."
+  if (/access_denied|denied|refus|validation de Google|utilisateur de test|not.*test user/i.test(msg))
+    return (
+      "Accès refusé par Google. Cause la plus fréquente : le compte n'est pas dans la liste " +
+      '« Utilisateurs de test » de ton écran de consentement OAuth. ' +
+      'Ouvre Google Cloud Console → API et services → Écran de consentement OAuth → Audience, ' +
+      "ajoute l'adresse du compte comme utilisateur de test, puis réessaie. " +
+      '(Ou tu as cliqué « Annuler » dans le navigateur — dans ce cas, relance simplement.)'
+    )
   if (/non configuré/i.test(msg)) return msg
   return 'Échec de la liaison : ' + msg
 }

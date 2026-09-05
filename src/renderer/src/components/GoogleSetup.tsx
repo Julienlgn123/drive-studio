@@ -6,6 +6,7 @@ const LINKS = {
   project: 'https://console.cloud.google.com/projectcreate',
   driveApi: 'https://console.cloud.google.com/apis/library/drive.googleapis.com',
   consent: 'https://console.cloud.google.com/auth/overview',
+  audience: 'https://console.cloud.google.com/auth/audience',
   credentials: 'https://console.cloud.google.com/apis/credentials'
 }
 
@@ -141,12 +142,18 @@ export default function GoogleSetup({ onSaved }: { onSaved?: () => void }): JSX.
         </Step>
 
         <Step n={3} title="Configurer l'écran de consentement">
-          Type « Externe ». Renseigne un nom d'app et ton e-mail. Dans <b>Audience</b>, ajoute
-          en <b>utilisateur de test</b> chaque adresse Google que tu comptes relier à l'app.
+          Type « Externe ». Renseigne un nom d'app et ton e-mail de contact.
           <LinkBtn url={LINKS.consent} label="Ouvrir l'écran de consentement" />
         </Step>
 
-        <Step n={4} title="Créer les identifiants OAuth">
+        <Step n={4} title="Ajouter les comptes en « utilisateurs de test »">
+          <b>Étape indispensable.</b> Dans « Audience », section <b>Utilisateurs de test</b> →
+          « + Add users » : ajoute <b>chaque adresse Google</b> que tu veux relier à l'app.
+          Sans ça, Google bloque la connexion (erreur 403 access_denied).
+          <LinkBtn url={LINKS.audience} label="Ouvrir la page Audience" />
+        </Step>
+
+        <Step n={5} title="Créer les identifiants OAuth">
           « + Créer des identifiants » → « ID client OAuth » → type <b>Application de bureau</b>.
           Aucune URL de redirection à saisir. Copie le <b>Client ID</b> et le{' '}
           <b>Client Secret</b> affichés.
