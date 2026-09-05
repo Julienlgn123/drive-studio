@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { UserPlus, RefreshCw, Trash2, DownloadCloud, AlertCircle, Wand2 } from 'lucide-react'
 import { useStore } from '../store'
 import ProgressBar from '../components/ProgressBar'
-import { mapAuthError } from '../components/Onboarding'
+import { mapAuthError } from '../lib/authErrors'
 import { formatBytes, formatRelative, accountColor } from '../lib/format'
 import type { Account, AccountRole } from '@shared/types'
 

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { X, Check, UserPlus, ArrowRight, ShieldCheck, HardDriveDownload } from 'lucide-react'
 import { useStore } from '../store'
 import GoogleSetup from './GoogleSetup'
+import { mapAuthError } from '../lib/authErrors'
 
 /**
  * Assistant de première configuration. S'affiche tant qu'aucun compte n'est lié.
@@ -186,22 +187,4 @@ export default function Onboarding(): JSX.Element {
       </motion.div>
     </div>
   )
-}
-
-export function mapAuthError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err)
-  if (/invalid_client|unauthorized_client/i.test(msg))
-    return 'Client ID ou Secret invalide. Vérifie-les dans Réglages (type « Application de bureau »).'
-  if (/refresh_token/i.test(msg))
-    return "Google n'a pas renvoyé de jeton durable. Va sur myaccount.google.com/permissions, retire l'app, puis relie le compte."
-  if (/access_denied|denied|refus|validation de Google|utilisateur de test|not.*test user/i.test(msg))
-    return (
-      "Accès refusé par Google. Cause la plus fréquente : le compte n'est pas dans la liste " +
-      '« Utilisateurs de test » de ton écran de consentement OAuth. ' +
-      'Ouvre Google Cloud Console → API et services → Écran de consentement OAuth → Audience, ' +
-      "ajoute l'adresse du compte comme utilisateur de test, puis réessaie. " +
-      '(Ou tu as cliqué « Annuler » dans le navigateur — dans ce cas, relance simplement.)'
-    )
-  if (/non configuré/i.test(msg)) return msg
-  return 'Échec de la liaison : ' + msg
 }
