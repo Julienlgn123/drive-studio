@@ -24,6 +24,7 @@ type FileFilters = {
   folderId?: string
   search?: string
   mimePrefix?: string
+  source?: 'app' | 'drive'
 }
 
 function on<T>(channel: string, cb: (payload: T) => void): () => void {
@@ -54,9 +55,24 @@ const api = {
     remove: (id: string): Promise<void> => ipcRenderer.invoke('accounts:remove', id),
     setRole: (id: string, role: AccountRole): Promise<Account> =>
       ipcRenderer.invoke('accounts:setRole', id, role),
-    sync: (id: string): Promise<Account> => ipcRenderer.invoke('accounts:sync', id),
+    sync: (id: string): Promise<Account | null> => ipcRenderer.invoke('accounts:sync', id),
     syncAll: (): Promise<Account[]> => ipcRenderer.invoke('accounts:syncAll'),
-    importFiles: (id: string): Promise<number> => ipcRenderer.invoke('accounts:importFiles', id)
+    /** Scanne le contenu Drive d'un compte (ajoute les fichiers déjà présents). */
+    syncFiles: (id: string): Promise<number> => ipcRenderer.invoke('accounts:syncFiles', id),
+    /** Scanne le contenu Drive de tous les comptes. */
+    syncAllFiles: (): Promise<void> => ipcRenderer.invoke('accounts:syncAllFiles'),
+    onFilesScanning: (cb: (p: { accountId: string; count: number }) => void) =>
+      on<{ accountId: string; count: number }>('account:filesScanning', cb),
+    onFilesSynced: (
+      cb: (p: {
+        accountId: string
+        result: { added: number; updated: number; removed: number; total: number }
+      }) => void
+    ) =>
+      on<{
+        accountId: string
+        result: { added: number; updated: number; removed: number; total: number }
+      }>('account:filesSynced', cb)
   },
   files: {
     list: (filters?: FileFilters): Promise<FileMeta[]> =>

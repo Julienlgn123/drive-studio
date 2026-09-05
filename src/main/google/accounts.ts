@@ -3,15 +3,18 @@ import {
   createAccount,
   createFileMeta,
   deleteAccount,
-  findFileByChecksum,
+  driveIdsForAccount,
   getAccount,
   getAccountByEmail,
   getAccounts,
-  getFiles,
-  updateAccount
+  getFileByDriveId,
+  pruneMissingFiles,
+  updateAccount,
+  updateFileMeta
 } from '../db'
 import { getQuota, listFiles } from './drive'
 import { revokeAccount, runOAuthFlow } from './oauth'
+import { broadcast } from '../events'
 import type { Account, AccountRole } from '@shared/types'
 
 /** Lance le flow OAuth et enregistre le compte (ou met à jour s'il existe déjà). */
@@ -28,6 +31,7 @@ export async function addAccount(): Promise<Account> {
       quotaUsed: q?.used ?? existing.quotaUsed,
       lastSync: Date.now()
     })
+    await syncAccountFiles(existing.id).catch(() => 0)
     addLog({ action: 'account_add', accountId: existing.id, status: 'success', label: email })
     return getAccount(existing.id)!
   }
@@ -59,7 +63,14 @@ export async function addAccount(): Promise<Account> {
     return getAccount(tmp.id)!
   }
 
-  addLog({ action: 'account_add', accountId: tmp.id, status: 'success', label: email })
+  // Répertorie immédiatement ce qui est déjà sur ce Drive.
+  const imported = await syncAccountFiles(tmp.id).catch(() => 0)
+  addLog({
+    action: 'account_add',
+    accountId: tmp.id,
+    status: 'success',
+    label: `${email}${imported ? ` · ${imported} fichier(s) déjà présents` : ''}`
+  })
   return getAccount(tmp.id)!
 }
 
@@ -112,36 +123,98 @@ export async function syncAllQuotas(): Promise<Account[]> {
   return getAccounts()
 }
 
+const filesSyncInFlight = new Set<string>()
+
+export interface FilesSyncResult {
+  added: number
+  updated: number
+  removed: number
+  total: number
+}
+
 /**
- * Importe la liste des fichiers déjà présents sur le Drive d'un compte
- * dans files_metadata (utile quand on relie un compte qui contient déjà des données).
+ * Réconcilie la liste locale des fichiers d'un compte avec le contenu réel
+ * de son Google Drive :
+ *  - nouveaux fichiers (créés hors de l'app) → ajoutés avec source 'drive'
+ *  - nom / taille / date modifiés → mis à jour
+ *  - fichiers supprimés directement sur Drive → retirés de la base
+ * Renvoie le nombre d'entrées ajoutées.
  */
-export async function importExistingFiles(accountId: string): Promise<number> {
-  const remote = await listFiles(accountId)
-  const known = new Set(getFiles({ accountId }).map((f) => f.driveFileId))
-  let added = 0
-  for (const rf of remote) {
-    if (known.has(rf.id)) continue
-    const checksum = rf.md5Checksum || ''
-    // Évite les doublons stricts inter-comptes basés sur le md5.
-    if (checksum && findFileByChecksum(checksum)) {
-      // On enregistre quand même l'entrée pour ce compte (fichier réellement présent).
-    }
-    createFileMeta({
-      driveFileId: rf.id,
-      accountId,
-      originalFilename: rf.name,
-      fileSize: rf.size,
-      mimeType: rf.mimeType,
-      checksum
+export async function syncAccountFiles(accountId: string): Promise<number> {
+  if (filesSyncInFlight.has(accountId)) return 0
+  filesSyncInFlight.add(accountId)
+  try {
+    const remote = await listFiles(accountId, {
+      onPage: (count) =>
+        broadcast('account:filesScanning', { accountId, count })
     })
-    added++
+
+    let added = 0
+    let updated = 0
+    for (const rf of remote) {
+      const existing = getFileByDriveId(accountId, rf.id)
+      const modifiedAt = Date.parse(rf.modifiedTime) || Date.now()
+      if (!existing) {
+        createFileMeta({
+          driveFileId: rf.id,
+          accountId,
+          originalFilename: rf.name,
+          fileSize: rf.size,
+          mimeType: rf.mimeType,
+          checksum: rf.md5Checksum || '',
+          source: 'drive',
+          modifiedAt,
+          webViewLink: rf.webViewLink
+        })
+        added++
+      } else if (
+        existing.originalFilename !== rf.name ||
+        existing.fileSize !== rf.size ||
+        existing.modifiedAt !== modifiedAt
+      ) {
+        updateFileMeta(existing.id, {
+          originalFilename: rf.name,
+          fileSize: rf.size,
+          mimeType: rf.mimeType,
+          modifiedAt,
+          webViewLink: rf.webViewLink,
+          ...(rf.md5Checksum && !existing.checksum ? { checksum: rf.md5Checksum } : {})
+        })
+        updated++
+      }
+    }
+
+    const present = new Set(remote.map((r) => r.id))
+    // Sécurité : ne pas purger si la liste est vide alors qu'on connaissait des
+    // fichiers (souvent un souci d'API transitoire).
+    const known = driveIdsForAccount(accountId)
+    let removed = 0
+    if (!(present.size === 0 && known.size > 3)) {
+      removed = pruneMissingFiles(accountId, present)
+    }
+
+    broadcast('account:filesSynced', {
+      accountId,
+      result: { added, updated, removed, total: remote.length } as FilesSyncResult
+    })
+    if (added || removed) {
+      addLog({
+        action: 'backup',
+        accountId,
+        status: 'success',
+        label: `scan Drive : ${added} ajouté(s), ${removed} disparu(s), ${remote.length} au total`
+      })
+    }
+    return added
+  } finally {
+    filesSyncInFlight.delete(accountId)
   }
-  addLog({
-    action: 'backup',
-    accountId,
-    status: 'success',
-    label: `import : ${added} fichier(s)`
-  })
-  return added
+}
+
+/** Scanne le contenu Drive de tous les comptes (séquentiel, best effort). */
+export async function syncAllFiles(): Promise<void> {
+  for (const acc of getAccounts()) {
+    if (acc.status === 'error') continue
+    await syncAccountFiles(acc.id).catch(() => null)
+  }
 }

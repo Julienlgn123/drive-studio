@@ -8,7 +8,10 @@ import {
   Info,
   FileArchive,
   MoreVertical,
-  FolderInput
+  FolderInput,
+  RefreshCw,
+  ExternalLink,
+  Cloud
 } from 'lucide-react'
 import { useStore } from '../store'
 import ContextMenu from '../components/ContextMenu'
@@ -27,30 +30,60 @@ interface Props {
 }
 
 export default function FilesView({ folderId }: Props): JSX.Element {
-  const { files, accounts, folders, loadFiles, loadFolders, loadDashboard, toast } = useStore()
+  const {
+    files,
+    accounts,
+    folders,
+    filesAccountFilter,
+    scanningAccountId,
+    scanCount,
+    loadFiles,
+    loadFolders,
+    loadDashboard,
+    loadAccounts,
+    syncDriveFiles,
+    toast
+  } = useStore()
   const [search, setSearch] = useState('')
-  const [accountFilter, setAccountFilter] = useState<string>('')
+  const [accountFilter, setAccountFilter] = useState<string>(filesAccountFilter ?? '')
   const [catFilter, setCatFilter] = useState<string>('')
+  const [sourceFilter, setSourceFilter] = useState<string>('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [menu, setMenu] = useState<{ x: number; y: number; file: FileMeta } | null>(null)
   const [infoFile, setInfoFile] = useState<FileMeta | null>(null)
   const [shareFile, setShareFile] = useState<FileMeta | null>(null)
 
   const folder = folders.find((f) => f.id === folderId)
+  const scanning = scanningAccountId !== null
 
   useEffect(() => {
     loadFiles()
     setSelected(new Set())
   }, [folderId])
 
+  // Consomme le pré-filtre par compte (clic depuis la page Comptes).
+  useEffect(() => {
+    if (filesAccountFilter) {
+      setAccountFilter(filesAccountFilter)
+      useStore.setState({ filesAccountFilter: null })
+    }
+  }, [filesAccountFilter])
+
   const rows = useMemo(() => {
     let base = folderId ? files.filter((f) => f.folderIds?.includes(folderId)) : files
     if (accountFilter) base = base.filter((f) => f.accountId === accountFilter)
     if (catFilter) base = base.filter((f) => mimeCategory(f.mimeType) === catFilter)
+    if (sourceFilter) base = base.filter((f) => f.source === sourceFilter)
     const q = search.toLowerCase().trim()
     if (q) base = base.filter((f) => f.originalFilename.toLowerCase().includes(q))
     return base
-  }, [files, folderId, accountFilter, catFilter, search])
+  }, [files, folderId, accountFilter, catFilter, sourceFilter, search])
+
+  async function scan(): Promise<void> {
+    await syncDriveFiles()
+    await Promise.all([loadFiles(), loadAccounts(), loadDashboard()])
+    toast('Contenu des Drive actualisé', 'success')
+  }
 
   function toggle(id: string): void {
     setSelected((s) => {
@@ -145,6 +178,15 @@ export default function FilesView({ folderId }: Props): JSX.Element {
               </button>
             </>
           )}
+          <button
+            className="btn btn-sm btn-secondary"
+            onClick={scan}
+            disabled={scanning || accounts.length === 0}
+            data-tooltip="Scanner le contenu réel de chaque Drive"
+          >
+            <RefreshCw size={13} style={scanning ? { animation: 'spin 0.7s linear infinite' } : undefined} />
+            {scanning ? `Scan… ${scanCount || ''}` : 'Actualiser'}
+          </button>
           <button className="btn btn-primary" onClick={pickUpload}>
             <Upload size={15} /> Ajouter
           </button>
@@ -188,6 +230,16 @@ export default function FilesView({ folderId }: Props): JSX.Element {
             <option value="archive">Archives</option>
             <option value="autre">Autre</option>
           </select>
+          <select
+            className="field-input"
+            style={{ width: 'auto' }}
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+          >
+            <option value="">Toute origine</option>
+            <option value="app">Ajoutés via l'app</option>
+            <option value="drive">Déjà sur le Drive</option>
+          </select>
         </div>
 
         {rows.length === 0 ? (
@@ -209,7 +261,7 @@ export default function FilesView({ folderId }: Props): JSX.Element {
                   <th style={{ width: 90 }}>Taille</th>
                   <th style={{ width: 110 }}>Type</th>
                   <th style={{ width: 190 }}>Compte</th>
-                  <th style={{ width: 130 }}>Ajouté</th>
+                  <th style={{ width: 130 }}>Modifié</th>
                   <th style={{ width: 90 }}></th>
                 </tr>
               </thead>
@@ -236,14 +288,33 @@ export default function FilesView({ folderId }: Props): JSX.Element {
                       <td>
                         <div className="cell-name">
                           <span>{f.originalFilename}</span>
+                          {f.source === 'drive' && (
+                            <span
+                              className="badge"
+                              style={{ background: 'var(--bg-overlay)', color: 'var(--text-tertiary)' }}
+                              title="Déjà présent sur le Drive (pas ajouté via l'app)"
+                            >
+                              <Cloud size={10} /> Drive
+                            </span>
+                          )}
                           {f.replicatedOn.length > 0 && (
                             <span
                               className="badge"
                               style={{ background: 'var(--success-dim)', color: 'var(--success)' }}
-                              title={`Répliqué sur ${f.replicatedOn.length} compte(s)`}
+                              title={`Présent sur ${f.replicatedOn.length + 1} compte(s)`}
                             >
                               ×{f.replicatedOn.length + 1}
                             </span>
+                          )}
+                          {f.webViewLink && (
+                            <button
+                              className="icon-btn"
+                              style={{ width: 20, height: 20 }}
+                              title="Ouvrir dans Google Drive"
+                              onClick={() => window.api.shell.openExternal(f.webViewLink!)}
+                            >
+                              <ExternalLink size={11} />
+                            </button>
                           )}
                         </div>
                       </td>
@@ -258,7 +329,7 @@ export default function FilesView({ folderId }: Props): JSX.Element {
                           {acc?.email.split('@')[0] ?? '—'}
                         </span>
                       </td>
-                      <td>{formatRelative(f.uploadedAt)}</td>
+                      <td>{formatRelative(f.modifiedAt || f.uploadedAt)}</td>
                       <td>
                         <div className="cell-actions">
                           <button className="icon-btn" onClick={() => download(f)} data-tooltip="Télécharger">

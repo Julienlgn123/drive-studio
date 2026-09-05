@@ -13,7 +13,8 @@ import {
   setAccountRole,
   syncAccountQuota,
   syncAllQuotas,
-  importExistingFiles
+  syncAccountFiles,
+  syncAllFiles
 } from './google/accounts'
 import {
   uploadLocalFile,
@@ -77,9 +78,16 @@ export function registerIpc(): void {
   ipcMain.handle('accounts:add', () => addAccount())
   ipcMain.handle('accounts:remove', (_, id: string) => removeAccount(id))
   ipcMain.handle('accounts:setRole', (_, id: string, role: AccountRole) => setAccountRole(id, role))
-  ipcMain.handle('accounts:sync', (_, id: string) => syncAccountQuota(id))
+  // Sync léger : quotas uniquement (un appel about.get par compte).
+  ipcMain.handle('accounts:sync', async (_, id: string) => {
+    await syncAccountQuota(id)
+    await syncAccountFiles(id).catch(() => 0)
+    return db.getAccount(id)
+  })
   ipcMain.handle('accounts:syncAll', () => syncAllQuotas())
-  ipcMain.handle('accounts:importFiles', (_, id: string) => importExistingFiles(id))
+  // Sync lourd : liste complète des fichiers de chaque Drive.
+  ipcMain.handle('accounts:syncFiles', (_, id: string) => syncAccountFiles(id))
+  ipcMain.handle('accounts:syncAllFiles', () => syncAllFiles())
 
   // ─── Files ───────────────────────────────────────────────────────────────
   ipcMain.handle('files:list', (_, filters) => db.getFiles(filters))

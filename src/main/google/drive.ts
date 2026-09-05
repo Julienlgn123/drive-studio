@@ -34,9 +34,13 @@ export interface RemoteFile {
   mimeType: string
   md5Checksum?: string
   modifiedTime: string
+  webViewLink?: string
 }
 
-export async function listFiles(accountId: string): Promise<RemoteFile[]> {
+export async function listFiles(
+  accountId: string,
+  opts: { onPage?: (count: number) => void } = {}
+): Promise<RemoteFile[]> {
   const drive = await driveFor(accountId)
   const out: RemoteFile[] = []
   let pageToken: string | undefined
@@ -44,7 +48,8 @@ export async function listFiles(accountId: string): Promise<RemoteFile[]> {
     const res = await drive.files.list({
       q: "trashed = false and mimeType != 'application/vnd.google-apps.folder'",
       spaces: 'drive',
-      fields: 'nextPageToken, files(id, name, size, mimeType, md5Checksum, modifiedTime)',
+      fields:
+        'nextPageToken, files(id, name, size, mimeType, md5Checksum, modifiedTime, webViewLink)',
       pageSize: 1000,
       pageToken
     })
@@ -55,9 +60,11 @@ export async function listFiles(accountId: string): Promise<RemoteFile[]> {
         size: f.size ? Number(f.size) : 0,
         mimeType: f.mimeType || 'application/octet-stream',
         md5Checksum: f.md5Checksum || undefined,
-        modifiedTime: f.modifiedTime || new Date().toISOString()
+        modifiedTime: f.modifiedTime || new Date().toISOString(),
+        webViewLink: f.webViewLink || undefined
       })
     }
+    opts.onPage?.(out.length)
     pageToken = res.data.nextPageToken || undefined
   } while (pageToken)
   return out

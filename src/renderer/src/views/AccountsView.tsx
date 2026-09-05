@@ -7,7 +7,7 @@ import { formatBytes, formatRelative, accountColor } from '../lib/format'
 import type { Account, AccountRole } from '@shared/types'
 
 export default function AccountsView(): JSX.Element {
-  const { accounts, settings, loadAccounts, loadAll, toast } = useStore()
+  const { accounts, settings, loadAccounts, loadAll, openAccountFiles, toast } = useStore()
   const [adding, setAdding] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
 
@@ -43,7 +43,7 @@ export default function AccountsView(): JSX.Element {
     try {
       await window.api.accounts.sync(id)
       await loadAll()
-      toast('Quota mis à jour', 'success')
+      toast('Compte synchronisé', 'success')
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Échec de la sync', 'error')
     } finally {
@@ -51,14 +51,17 @@ export default function AccountsView(): JSX.Element {
     }
   }
 
-  async function importFiles(id: string): Promise<void> {
+  async function scanDrive(id: string): Promise<void> {
     setBusyId(id)
     try {
-      const n = await window.api.accounts.importFiles(id)
+      const n = await window.api.accounts.syncFiles(id)
       await loadAll()
-      toast(`${n} fichier(s) importé(s) depuis Drive`, 'success')
+      toast(
+        n > 0 ? `${n} fichier(s) trouvé(s) sur ce Drive` : 'Contenu du Drive à jour',
+        'success'
+      )
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Échec de l\'import', 'error')
+      toast(err instanceof Error ? err.message : 'Échec du scan', 'error')
     } finally {
       setBusyId(null)
     }
@@ -178,7 +181,8 @@ export default function AccountsView(): JSX.Element {
                 busy={busyId === a.id}
                 onRole={setRole}
                 onSync={sync}
-                onImport={importFiles}
+                onScan={scanDrive}
+                onOpenFiles={openAccountFiles}
                 onRemove={remove}
               />
             ))}
@@ -195,7 +199,8 @@ function AccountCard({
   busy,
   onRole,
   onSync,
-  onImport,
+  onScan,
+  onOpenFiles,
   onRemove
 }: {
   account: Account
@@ -203,10 +208,13 @@ function AccountCard({
   busy: boolean
   onRole: (id: string, role: AccountRole) => void
   onSync: (id: string) => void
-  onImport: (id: string) => void
+  onScan: (id: string) => void
+  onOpenFiles: (id: string) => void
   onRemove: (id: string, email: string) => void
 }): JSX.Element {
   const ratio = a.quotaTotal > 0 ? a.quotaUsed / a.quotaTotal : 0
+  const total = a.filesCount ?? 0
+  const fromDrive = a.driveFilesCount ?? 0
   return (
     <div className="account-card">
       <div className="account-card-head">
@@ -227,9 +235,15 @@ function AccountCard({
           <span className="muted">
             {formatBytes(a.quotaUsed)} / {formatBytes(a.quotaTotal)}
           </span>
-          <span className="muted">
-            {a.filesCount ?? 0} fichier{(a.filesCount ?? 0) !== 1 ? 's' : ''}
-          </span>
+          <button
+            className="muted"
+            style={{ fontSize: 12, textDecoration: 'underline', textUnderlineOffset: 2 }}
+            onClick={() => onOpenFiles(a.id)}
+            title="Voir les fichiers de ce compte"
+          >
+            {total} fichier{total !== 1 ? 's' : ''}
+            {fromDrive > 0 ? ` · ${fromDrive} déjà présent${fromDrive !== 1 ? 's' : ''}` : ''}
+          </button>
         </div>
         <ProgressBar ratio={ratio} />
       </div>
@@ -247,8 +261,13 @@ function AccountCard({
         <button className="btn btn-sm btn-secondary" onClick={() => onSync(a.id)} disabled={busy}>
           <RefreshCw size={12} /> Sync
         </button>
-        <button className="btn btn-sm btn-secondary" onClick={() => onImport(a.id)} disabled={busy}>
-          <DownloadCloud size={12} /> Importer
+        <button
+          className="btn btn-sm btn-secondary"
+          onClick={() => onScan(a.id)}
+          disabled={busy}
+          data-tooltip="Lister tout le contenu du Drive"
+        >
+          <DownloadCloud size={12} /> Scanner
         </button>
         <button
           className="btn btn-sm btn-danger"

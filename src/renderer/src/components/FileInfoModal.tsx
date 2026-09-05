@@ -65,10 +65,28 @@ export default function FileInfoModal({
           <Row k="Taille" v={formatBytes(file.fileSize)} />
           <Row k="Type" v={file.mimeType} />
           <Row k="Compte" v={account?.email ?? file.accountId} />
-          <Row k="Ajouté le" v={formatDate(file.uploadedAt)} />
+          <Row
+            k="Origine"
+            v={file.source === 'drive' ? 'Déjà présent sur le Drive' : "Envoyé via l'application"}
+          />
+          <Row k="Modifié le" v={formatDate(file.modifiedAt || file.uploadedAt)} />
+          <Row k="Repéré le" v={formatDate(file.uploadedAt)} />
           <Row k="Statut" v={file.status} />
-          <Row k="Checksum" v={file.checksum || '—'} mono />
+          <Row
+            k={file.checksum.length === 64 ? 'SHA-256' : 'MD5 (Drive)'}
+            v={file.checksum || '—'}
+            mono
+          />
           <Row k="ID Drive" v={file.driveFileId} mono />
+          {file.webViewLink && (
+            <button
+              className="btn btn-sm btn-secondary"
+              style={{ alignSelf: 'flex-start' }}
+              onClick={() => window.api.shell.openExternal(file.webViewLink!)}
+            >
+              Ouvrir dans Google Drive
+            </button>
+          )}
         </div>
       )}
 

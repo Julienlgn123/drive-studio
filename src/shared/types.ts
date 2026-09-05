@@ -13,11 +13,16 @@ export interface Account {
   status: AccountStatus
   lastSync: number | null
   createdAt: number
-  /** Nombre de fichiers connus localement pour ce compte (calculé). */
+  /** Nombre total de fichiers connus pour ce compte (calculé). */
   filesCount?: number
+  /** Dont fichiers déjà présents sur le Drive (non ajoutés via l'app). */
+  driveFilesCount?: number
 }
 
 export type FileStatus = 'synced' | 'pending' | 'error'
+
+/** Origine d'une entrée : envoyée via l'app ou déjà présente sur le Drive. */
+export type FileSource = 'app' | 'drive'
 
 export interface FileMeta {
   id: string
@@ -31,6 +36,11 @@ export interface FileMeta {
   /** Ids des comptes (backup) où le fichier est répliqué. */
   replicatedOn: string[]
   status: FileStatus
+  source: FileSource
+  /** Date de dernière modification côté Drive (ms). */
+  modifiedAt: number
+  /** Lien de consultation Google Drive. */
+  webViewLink?: string
   /** Ids des dossiers virtuels contenant ce fichier (calculé). */
   folderIds?: string[]
 }

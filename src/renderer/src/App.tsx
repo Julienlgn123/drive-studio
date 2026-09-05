@@ -28,6 +28,7 @@ export default function App(): JSX.Element {
     loadDashboard,
     loadJobs,
     syncQuotas,
+    syncDriveFiles,
     pushTransfer,
     toast
   } = useStore()
@@ -39,11 +40,12 @@ export default function App(): JSX.Element {
     ;(async () => {
       await loadAll()
       window.api.app.notifyReady()
-      // Première synchro des quotas Drive au démarrage (silencieuse).
+      // Au démarrage : quotas + scan complet du contenu de chaque Drive.
       syncQuotas({ silent: true })
+      syncDriveFiles({ silent: true })
     })()
 
-    const off = window.api.transfers.onProgress((t) => {
+    const offTransfer = window.api.transfers.onProgress((t) => {
       pushTransfer(t)
       if (t.status === 'done' && (t.kind === 'upload' || t.kind === 'replicate')) {
         loadFiles()
@@ -53,7 +55,21 @@ export default function App(): JSX.Element {
         loadAccounts()
       }
     })
-    return off
+    const offScanning = window.api.accounts.onFilesScanning((p) => {
+      useStore.setState({ scanningAccountId: p.accountId, scanCount: p.count })
+    })
+    const offScanned = window.api.accounts.onFilesSynced((p) => {
+      if (p.result.added || p.result.removed || p.result.updated) {
+        loadFiles()
+        loadAccounts()
+        loadDashboard()
+      }
+    })
+    return () => {
+      offTransfer()
+      offScanning()
+      offScanned()
+    }
   }, [])
 
   // Backup terminé (event dédié) → recharge jobs + comptes + dashboard.
@@ -76,6 +92,11 @@ export default function App(): JSX.Element {
       if (document.hidden) return
       syncQuotas({ silent: true, minIntervalMs: 45_000 })
     }, 60_000)
+    // Scan complet du contenu des Drive toutes les 5 min.
+    const filesInterval = setInterval(() => {
+      if (document.hidden) return
+      syncDriveFiles({ silent: true })
+    }, 300_000)
     function onFocus(): void {
       syncQuotas({ silent: true, minIntervalMs: 20_000 })
       loadJobs()
@@ -88,6 +109,7 @@ export default function App(): JSX.Element {
     document.addEventListener('visibilitychange', onVisible)
     return () => {
       clearInterval(interval)
+      clearInterval(filesInterval)
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisible)
     }

@@ -64,6 +64,13 @@ interface AppStore {
 
   /** Rafraîchit les quotas Drive de tous les comptes puis recharge les données. */
   syncQuotas: (opts?: { silent?: boolean; minIntervalMs?: number }) => Promise<void>
+  /** Scanne le contenu réel de chaque Drive (fichiers déjà présents inclus). */
+  scanningAccountId: string | null
+  scanCount: number
+  syncDriveFiles: (opts?: { silent?: boolean }) => Promise<void>
+  /** Pré-filtre appliqué à la page Fichiers lors de la prochaine ouverture. */
+  filesAccountFilter: string | null
+  openAccountFiles: (accountId: string) => void
 
   applyTheme: () => void
   setTheme: (t: 'dark' | 'light') => Promise<void>
@@ -94,9 +101,14 @@ export const useStore = create<AppStore>((set, get) => ({
   onboardingDismissed: false,
   lastSyncAt: null,
   syncing: false,
+  scanningAccountId: null,
+  scanCount: 0,
+  filesAccountFilter: null,
 
   setView: (v, folderId = null) => set({ view: v, activeFolderId: folderId }),
   dismissOnboarding: () => set({ onboardingDismissed: true }),
+  openAccountFiles: (accountId) =>
+    set({ view: 'files', activeFolderId: null, filesAccountFilter: accountId }),
 
   loadAll: async () => {
     await Promise.all([
@@ -125,6 +137,22 @@ export const useStore = create<AppStore>((set, get) => ({
       }
     } finally {
       set({ syncing: false })
+    }
+  },
+
+  syncDriveFiles: async (opts) => {
+    if (get().accounts.length === 0) return
+    if (get().scanningAccountId) return
+    set({ scanningAccountId: 'all', scanCount: 0 })
+    try {
+      await api.accounts.syncAllFiles()
+      await Promise.all([get().loadFiles(), get().loadAccounts(), get().loadDashboard()])
+    } catch (err) {
+      if (!opts?.silent) {
+        get().toast(err instanceof Error ? err.message : 'Échec du scan Drive', 'error')
+      }
+    } finally {
+      set({ scanningAccountId: null, scanCount: 0 })
     }
   },
 

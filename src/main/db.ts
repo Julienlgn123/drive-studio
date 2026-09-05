@@ -54,7 +54,12 @@ export function initDb(): void {
       checksum TEXT NOT NULL DEFAULT '',
       uploaded_at INTEGER NOT NULL,
       replicated_on TEXT NOT NULL DEFAULT '[]',
-      status TEXT NOT NULL DEFAULT 'synced'
+      status TEXT NOT NULL DEFAULT 'synced',
+      -- 'app'   : envoyé via l'application (on connaît le SHA-256)
+      -- 'drive' : déjà présent sur le Drive, découvert lors d'une synchro
+      source TEXT NOT NULL DEFAULT 'app',
+      modified_at INTEGER NOT NULL DEFAULT 0,
+      web_view_link TEXT
     );
 
     CREATE TABLE IF NOT EXISTS backup_jobs (
@@ -119,8 +124,20 @@ export function initDb(): void {
 
     CREATE INDEX IF NOT EXISTS idx_files_account ON files_metadata(account_id);
     CREATE INDEX IF NOT EXISTS idx_files_checksum ON files_metadata(checksum);
+    CREATE INDEX IF NOT EXISTS idx_files_drive ON files_metadata(drive_file_id);
     CREATE INDEX IF NOT EXISTS idx_logs_ts ON sync_logs(timestamp DESC);
   `)
+
+  // Migrations défensives pour les bases créées avant l'ajout de colonnes.
+  const fileCols = new Set(
+    (db.prepare('PRAGMA table_info(files_metadata)').all() as { name: string }[]).map((c) => c.name)
+  )
+  if (!fileCols.has('source'))
+    db.exec("ALTER TABLE files_metadata ADD COLUMN source TEXT NOT NULL DEFAULT 'app'")
+  if (!fileCols.has('modified_at'))
+    db.exec('ALTER TABLE files_metadata ADD COLUMN modified_at INTEGER NOT NULL DEFAULT 0')
+  if (!fileCols.has('web_view_link'))
+    db.exec('ALTER TABLE files_metadata ADD COLUMN web_view_link TEXT')
 }
 
 // ─── Accounts ──────────────────────────────────────────────────────────────
@@ -140,11 +157,7 @@ interface DbAccount {
 }
 
 function rowToAccount(row: DbAccount): Account {
-  const filesCount = (
-    db.prepare('SELECT COUNT(*) AS n FROM files_metadata WHERE account_id = ?').get(row.id) as {
-      n: number
-    }
-  ).n
+  const counts = countFilesBySource(row.id)
   return {
     id: row.id,
     email: row.email,
@@ -154,7 +167,8 @@ function rowToAccount(row: DbAccount): Account {
     status: row.status as AccountStatus,
     lastSync: row.last_sync,
     createdAt: row.created_at,
-    filesCount
+    filesCount: counts.app + counts.drive,
+    driveFilesCount: counts.drive
   }
 }
 
@@ -293,6 +307,9 @@ interface DbFile {
   uploaded_at: number
   replicated_on: string
   status: string
+  source: string
+  modified_at: number
+  web_view_link: string | null
 }
 
 function rowToFile(row: DbFile): FileMeta {
@@ -318,6 +335,9 @@ function rowToFile(row: DbFile): FileMeta {
     uploadedAt: row.uploaded_at,
     replicatedOn,
     status: row.status as FileMeta['status'],
+    source: (row.source as FileMeta['source']) ?? 'app',
+    modifiedAt: row.modified_at || row.uploaded_at,
+    webViewLink: row.web_view_link ?? undefined,
     folderIds
   }
 }
@@ -327,6 +347,7 @@ export function getFiles(filters?: {
   folderId?: string
   search?: string
   mimePrefix?: string
+  source?: 'app' | 'drive'
 }): FileMeta[] {
   const where: string[] = []
   const params: unknown[] = []
@@ -342,6 +363,10 @@ export function getFiles(filters?: {
     where.push('f.mime_type LIKE ?')
     params.push(filters.mimePrefix + '%')
   }
+  if (filters?.source) {
+    where.push('f.source = ?')
+    params.push(filters.source)
+  }
   let sql = 'SELECT f.* FROM files_metadata f'
   if (filters?.folderId) {
     sql += ' JOIN folder_files ff ON ff.file_id = f.id AND ff.folder_id = ?'
@@ -354,6 +379,13 @@ export function getFiles(filters?: {
 
 export function getFile(id: string): FileMeta | null {
   const row = db.prepare('SELECT * FROM files_metadata WHERE id = ?').get(id) as DbFile | undefined
+  return row ? rowToFile(row) : null
+}
+
+export function getFileByDriveId(accountId: string, driveFileId: string): FileMeta | null {
+  const row = db
+    .prepare('SELECT * FROM files_metadata WHERE account_id = ? AND drive_file_id = ?')
+    .get(accountId, driveFileId) as DbFile | undefined
   return row ? rowToFile(row) : null
 }
 
@@ -372,13 +404,17 @@ export function createFileMeta(data: {
   fileSize: number
   mimeType: string
   checksum: string
+  source?: 'app' | 'drive'
+  modifiedAt?: number
+  webViewLink?: string
 }): FileMeta {
   const id = uuid()
   const now = Date.now()
   db.prepare(
     `INSERT INTO files_metadata
-      (id, drive_file_id, account_id, original_filename, file_size, mime_type, checksum, uploaded_at, replicated_on, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', 'synced')`
+      (id, drive_file_id, account_id, original_filename, file_size, mime_type, checksum,
+       uploaded_at, replicated_on, status, source, modified_at, web_view_link)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', 'synced', ?, ?, ?)`
   ).run(
     id,
     data.driveFileId,
@@ -387,9 +423,90 @@ export function createFileMeta(data: {
     data.fileSize,
     data.mimeType,
     data.checksum,
-    now
+    now,
+    data.source ?? 'app',
+    data.modifiedAt ?? now,
+    data.webViewLink ?? null
   )
   return getFile(id)!
+}
+
+export function updateFileMeta(
+  id: string,
+  data: Partial<{
+    originalFilename: string
+    fileSize: number
+    mimeType: string
+    checksum: string
+    modifiedAt: number
+    webViewLink: string
+  }>
+): void {
+  const map: Record<string, string> = {
+    originalFilename: 'original_filename',
+    fileSize: 'file_size',
+    mimeType: 'mime_type',
+    checksum: 'checksum',
+    modifiedAt: 'modified_at',
+    webViewLink: 'web_view_link'
+  }
+  const fields: string[] = []
+  const values: unknown[] = []
+  for (const [k, col] of Object.entries(map)) {
+    const v = (data as Record<string, unknown>)[k]
+    if (v !== undefined) {
+      fields.push(`${col} = ?`)
+      values.push(v)
+    }
+  }
+  if (!fields.length) return
+  values.push(id)
+  db.prepare(`UPDATE files_metadata SET ${fields.join(', ')} WHERE id = ?`).run(...values)
+}
+
+/** Ids Drive de tous les fichiers connus pour un compte. */
+export function driveIdsForAccount(accountId: string): Set<string> {
+  return new Set(
+    (
+      db
+        .prepare('SELECT drive_file_id FROM files_metadata WHERE account_id = ?')
+        .all(accountId) as { drive_file_id: string }[]
+    ).map((r) => r.drive_file_id)
+  )
+}
+
+/**
+ * Supprime les entrées d'un compte dont le fichier n'existe plus sur Drive.
+ * Ne touche pas aux fichiers 'app' non encore confirmés (au cas où la liste
+ * Drive serait incomplète juste après un upload).
+ */
+export function pruneMissingFiles(accountId: string, presentDriveIds: Set<string>): number {
+  const rows = db
+    .prepare('SELECT id, drive_file_id, source FROM files_metadata WHERE account_id = ?')
+    .all(accountId) as { id: string; drive_file_id: string; source: string }[]
+  const del = db.prepare('DELETE FROM files_metadata WHERE id = ?')
+  let removed = 0
+  for (const r of rows) {
+    if (!presentDriveIds.has(r.drive_file_id)) {
+      del.run(r.id)
+      removed++
+    }
+  }
+  return removed
+}
+
+export function countFilesBySource(accountId: string): { app: number; drive: number } {
+  const rows = db
+    .prepare(
+      "SELECT source, COUNT(*) AS n FROM files_metadata WHERE account_id = ? GROUP BY source"
+    )
+    .all(accountId) as { source: string; n: number }[]
+  const out = { app: 0, drive: 0 }
+  for (const r of rows) {
+    if (r.source === 'drive') out.drive = r.n
+    else out.app = r.n
+  }
+  return out
 }
 
 export function setFileReplicatedOn(id: string, accountIds: string[]): void {
