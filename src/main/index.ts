@@ -28,11 +28,20 @@ function createWindow(): void {
   mainWindow.on('ready-to-show', () => mainWindow?.show())
 
   if (is.dev) {
-    mainWindow.webContents.on('console-message', (_e, level, message, line, source) => {
-      // Remonte les logs du renderer dans le terminal pendant le dev.
-      // eslint-disable-next-line no-console
-      console.log(`[renderer:${level}] ${message} (${source}:${line})`)
-    })
+    // Remonte les logs du renderer dans le terminal pendant le dev.
+    // Electron 35 : nouvel objet d'événement { message, level, lineNumber, sourceId }.
+    mainWindow.webContents.on(
+      'console-message',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (e: any, level?: unknown, message?: unknown, line?: unknown, source?: unknown) => {
+        const msg = e && typeof e === 'object' && 'message' in e ? e.message : message
+        const src = e && typeof e === 'object' && 'sourceId' in e ? e.sourceId : source
+        const ln = e && typeof e === 'object' && 'lineNumber' in e ? e.lineNumber : line
+        // eslint-disable-next-line no-console
+        console.log(`[renderer] ${msg} (${src}:${ln})`)
+        void level
+      }
+    )
   }
   mainWindow.on('closed', () => {
     mainWindow = null

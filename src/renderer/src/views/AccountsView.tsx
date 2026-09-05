@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { UserPlus, RefreshCw, Trash2, DownloadCloud, AlertCircle } from 'lucide-react'
+import { UserPlus, RefreshCw, Trash2, DownloadCloud, AlertCircle, Wand2 } from 'lucide-react'
 import { useStore } from '../store'
 import ProgressBar from '../components/ProgressBar'
+import { mapAuthError } from '../components/Onboarding'
 import { formatBytes, formatRelative, accountColor } from '../lib/format'
 import type { Account, AccountRole } from '@shared/types'
 
 export default function AccountsView(): JSX.Element {
-  const { accounts, settings, loadAccounts, loadAll, setView, toast } = useStore()
+  const { accounts, settings, loadAccounts, loadAll, toast } = useStore()
   const [adding, setAdding] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
 
@@ -16,17 +17,17 @@ export default function AccountsView(): JSX.Element {
 
   async function addAccount(): Promise<void> {
     if (!settings.googleConfigured) {
-      toast('Configure d\'abord tes identifiants Google dans Réglages', 'error')
-      setView('settings')
+      toast("Configure d'abord tes identifiants Google (assistant ou Réglages)", 'error')
+      useStore.setState({ onboardingDismissed: false })
       return
     }
     setAdding(true)
     try {
       await window.api.accounts.add()
       await loadAll()
-      toast('Compte lié', 'success')
+      toast('Compte lié ✓', 'success')
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Échec de la liaison', 'error')
+      toast(mapAuthError(err), 'error')
     } finally {
       setAdding(false)
     }
@@ -89,12 +90,32 @@ export default function AccountsView(): JSX.Element {
         <div className="page-header-right">
           <button className="btn btn-primary" onClick={addAccount} disabled={adding}>
             {adding ? <div className="spinner" style={{ width: 14, height: 14 }} /> : <UserPlus size={15} />}
-            {adding ? 'Autorisation…' : 'Ajouter un compte'}
+            {adding ? 'En attente de Google…' : 'Ajouter un compte'}
           </button>
         </div>
       </div>
 
       <div className="view-pad">
+        {adding && (
+          <div
+            className="card"
+            style={{
+              marginBottom: 16,
+              background: 'var(--accent-dim)',
+              borderColor: 'var(--accent)',
+              display: 'flex',
+              gap: 10,
+              alignItems: 'center',
+              fontSize: 13,
+              color: 'var(--accent-light)'
+            }}
+          >
+            <div className="spinner" style={{ width: 14, height: 14 }} />
+            Une fenêtre de navigateur s'est ouverte — connecte-toi, autorise l'accès à Drive,
+            puis reviens ici. Le compte apparaîtra automatiquement.
+          </div>
+        )}
+
         {!settings.googleConfigured && (
           <div
             className="card"
@@ -110,9 +131,13 @@ export default function AccountsView(): JSX.Element {
             }}
           >
             <AlertCircle size={16} />
-            Identifiants OAuth non configurés.
-            <button className="btn btn-sm btn-secondary" onClick={() => setView('settings')} style={{ marginLeft: 'auto' }}>
-              Configurer
+            Identifiants Google OAuth non configurés (obligatoire pour ajouter un compte).
+            <button
+              className="btn btn-sm btn-secondary"
+              onClick={() => useStore.setState({ onboardingDismissed: false })}
+              style={{ marginLeft: 'auto' }}
+            >
+              <Wand2 size={13} /> Assistant
             </button>
           </div>
         )}
@@ -122,9 +147,26 @@ export default function AccountsView(): JSX.Element {
             <div className="empty-state-icon">👤</div>
             <div className="empty-state-title">Aucun compte lié</div>
             <div className="empty-state-desc">
-              Clique sur « Ajouter un compte » : une fenêtre Google s'ouvrira pour autoriser
-              l'accès à Drive.
+              {settings.googleConfigured
+                ? 'Clique sur « Ajouter un compte ». Ton navigateur s’ouvrira pour choisir le compte Google et autoriser l’accès à Drive ; une page « vous pouvez fermer cet onglet » confirmera.'
+                : 'Configure d’abord tes identifiants Google via l’assistant, puis ajoute autant de comptes Drive que tu veux.'}
             </div>
+            <button
+              className="btn btn-primary"
+              style={{ marginTop: 8 }}
+              onClick={settings.googleConfigured ? addAccount : () => useStore.setState({ onboardingDismissed: false })}
+              disabled={adding}
+            >
+              {settings.googleConfigured ? (
+                <>
+                  <UserPlus size={14} /> Ajouter un compte
+                </>
+              ) : (
+                <>
+                  <Wand2 size={14} /> Ouvrir l'assistant
+                </>
+              )}
+            </button>
           </div>
         ) : (
           <div className="card-grid">

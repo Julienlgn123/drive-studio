@@ -5,6 +5,7 @@ import TitleBar from './components/TitleBar'
 import Sidebar from './components/Sidebar'
 import ToastStack from './components/Toast'
 import TransfersPanel from './components/TransfersPanel'
+import Onboarding from './components/Onboarding'
 import DashboardView from './views/DashboardView'
 import FilesView from './views/FilesView'
 import AccountsView from './views/AccountsView'
@@ -14,22 +15,71 @@ import SettingsView from './views/SettingsView'
 import SharedView from './views/SharedView'
 
 export default function App(): JSX.Element {
-  const { view, activeFolderId, loadAll, loadFiles, loadFolders, loadDashboard, pushTransfer, toast } =
-    useStore()
+  const {
+    view,
+    activeFolderId,
+    settings,
+    accounts,
+    onboardingDismissed,
+    loadAll,
+    loadAccounts,
+    loadFiles,
+    loadFolders,
+    loadDashboard,
+    loadJobs,
+    syncQuotas,
+    pushTransfer,
+    toast
+  } = useStore()
   const [dragging, setDragging] = useState(false)
 
+  const showOnboarding = !onboardingDismissed && (!settings.googleConfigured || accounts.length === 0)
+
   useEffect(() => {
-    loadAll()
-    window.api.app.notifyReady()
+    ;(async () => {
+      await loadAll()
+      window.api.app.notifyReady()
+      // Première synchro des quotas Drive au démarrage (silencieuse).
+      syncQuotas({ silent: true })
+    })()
+
     const off = window.api.transfers.onProgress((t) => {
       pushTransfer(t)
-      if (t.status === 'done' && t.kind === 'upload') {
+      if (t.status === 'done' && (t.kind === 'upload' || t.kind === 'replicate')) {
         loadFiles()
         loadFolders()
         loadDashboard()
+        loadJobs()
       }
     })
     return off
+  }, [])
+
+  // Backup terminé (event dédié) → recharge jobs + comptes + dashboard.
+  useEffect(() => {
+    const off = window.api.backup.onProgress((p) => {
+      if (p.status === 'completed' || p.status === 'failed') {
+        loadJobs()
+        loadDashboard()
+        loadAccounts()
+      }
+    })
+    return off
+  }, [])
+
+  // Fraîcheur des données : synchro périodique + au retour sur la fenêtre.
+  useEffect(() => {
+    const interval = setInterval(() => syncQuotas({ silent: true, minIntervalMs: 90_000 }), 120_000)
+    function onFocus(): void {
+      syncQuotas({ silent: true, minIntervalMs: 30_000 })
+      loadJobs()
+      loadDashboard()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [])
 
   // Drag & drop de fichiers n'importe où dans la fenêtre → upload
@@ -113,6 +163,7 @@ export default function App(): JSX.Element {
       {dragging && <div className="dropzone-overlay">Déposez pour envoyer vers Drive</div>}
       <TransfersPanel />
       <ToastStack />
+      {showOnboarding && <Onboarding />}
     </div>
   )
 }

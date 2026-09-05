@@ -124,13 +124,16 @@ export default function DashboardView(): JSX.Element {
         {accounts.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">☁️</div>
-            <div className="empty-state-title">Aucun compte Google lié</div>
+            <div className="empty-state-title">Bienvenue 👋</div>
             <div className="empty-state-desc">
-              Configure tes identifiants OAuth dans Réglages, puis ajoute tes comptes Drive
-              depuis la page Comptes.
+              L'assistant te guide en 3 étapes : identifiants Google, ajout d'un compte Drive,
+              rôles. ~5 minutes, une seule fois.
             </div>
-            <button className="btn btn-primary" onClick={() => setView('settings')}>
-              Ouvrir les Réglages
+            <button
+              className="btn btn-primary"
+              onClick={() => useStore.setState({ onboardingDismissed: false })}
+            >
+              Ouvrir l'assistant de configuration
             </button>
           </div>
         ) : (

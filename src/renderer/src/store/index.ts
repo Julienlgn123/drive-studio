@@ -45,7 +45,13 @@ interface AppStore {
   transfers: TransferProgress[]
   toasts: ToastMsg[]
 
+  /** Onboarding : masqué manuellement par l'utilisateur pour la session. */
+  onboardingDismissed: boolean
+  lastSyncAt: number | null
+  syncing: boolean
+
   setView: (v: ViewName, folderId?: string | null) => void
+  dismissOnboarding: () => void
 
   loadAll: () => Promise<void>
   loadSettings: () => Promise<void>
@@ -55,6 +61,9 @@ interface AppStore {
   loadJobs: () => Promise<void>
   loadLogs: () => Promise<void>
   loadDashboard: () => Promise<void>
+
+  /** Rafraîchit les quotas Drive de tous les comptes puis recharge les données. */
+  syncQuotas: (opts?: { silent?: boolean; minIntervalMs?: number }) => Promise<void>
 
   applyTheme: () => void
   setTheme: (t: 'dark' | 'light') => Promise<void>
@@ -82,7 +91,12 @@ export const useStore = create<AppStore>((set, get) => ({
   transfers: [],
   toasts: [],
 
+  onboardingDismissed: false,
+  lastSyncAt: null,
+  syncing: false,
+
   setView: (v, folderId = null) => set({ view: v, activeFolderId: folderId }),
+  dismissOnboarding: () => set({ onboardingDismissed: true }),
 
   loadAll: async () => {
     await Promise.all([
@@ -93,6 +107,25 @@ export const useStore = create<AppStore>((set, get) => ({
       get().loadJobs(),
       get().loadDashboard()
     ])
+  },
+
+  syncQuotas: async (opts) => {
+    const { syncing, lastSyncAt, accounts } = get()
+    if (syncing) return
+    if (accounts.length === 0) return
+    if (opts?.minIntervalMs && lastSyncAt && Date.now() - lastSyncAt < opts.minIntervalMs) return
+    set({ syncing: true })
+    try {
+      await api.accounts.syncAll()
+      await Promise.all([get().loadAccounts(), get().loadDashboard(), get().loadFiles()])
+      set({ lastSyncAt: Date.now() })
+    } catch (err) {
+      if (!opts?.silent) {
+        get().toast(err instanceof Error ? err.message : 'Échec de la synchronisation', 'error')
+      }
+    } finally {
+      set({ syncing: false })
+    }
   },
 
   loadSettings: async () => {

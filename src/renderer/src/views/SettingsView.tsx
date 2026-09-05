@@ -1,36 +1,14 @@
-import { useState } from 'react'
-import { Moon, Sun, Check, ExternalLink, KeyRound } from 'lucide-react'
+import { Moon, Sun, Wand2, RefreshCw } from 'lucide-react'
 import { useStore } from '../store'
+import GoogleSetup from '../components/GoogleSetup'
+import { formatRelative } from '../lib/format'
 
 export default function SettingsView(): JSX.Element {
-  const { settings, setTheme, loadSettings, loadAll, toast } = useStore()
-  const [clientId, setClientId] = useState('')
-  const [clientSecret, setClientSecret] = useState('')
-  const [busy, setBusy] = useState(false)
+  const { settings, accounts, lastSyncAt, syncing, setTheme, syncQuotas } = useStore()
 
-  async function saveGoogle(): Promise<void> {
-    if (!clientId.trim() || !clientSecret.trim()) {
-      toast('Renseigne le Client ID et le Client Secret', 'error')
-      return
-    }
-    setBusy(true)
-    try {
-      await window.api.settings.setGoogle(clientId.trim(), clientSecret.trim())
-      setClientId('')
-      setClientSecret('')
-      await Promise.all([loadSettings(), loadAll()])
-      toast('Identifiants Google enregistrés (chiffrés)', 'success')
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Erreur', 'error')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function clearGoogle(): Promise<void> {
-    await window.api.settings.clearGoogle()
-    await loadSettings()
-    toast('Identifiants supprimés', 'success')
+  function reopenWizard(): void {
+    // Réaffiche l'assistant : il apparaît tant qu'il reste des étapes à faire.
+    useStore.setState({ onboardingDismissed: false })
   }
 
   return (
@@ -39,7 +17,20 @@ export default function SettingsView(): JSX.Element {
         <span className="page-header-title">Réglages</span>
       </div>
 
-      <div className="view-pad col" style={{ gap: 24, maxWidth: 640 }}>
+      <div className="view-pad col" style={{ gap: 24, maxWidth: 660 }}>
+        {/* Assistant */}
+        <div className="card col" style={{ gap: 12 }}>
+          <span className="section-label" style={{ marginBottom: 0 }}>
+            Prise en main
+          </span>
+          <p className="muted" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+            L'assistant te guide pas à pas : identifiants Google, ajout d'un compte, rôles.
+          </p>
+          <button className="btn btn-secondary" style={{ alignSelf: 'flex-start' }} onClick={reopenWizard}>
+            <Wand2 size={14} /> Ouvrir l'assistant de configuration
+          </button>
+        </div>
+
         {/* Thème */}
         <div className="card col" style={{ gap: 12 }}>
           <span className="section-label" style={{ marginBottom: 0 }}>
@@ -61,74 +52,33 @@ export default function SettingsView(): JSX.Element {
           </div>
         </div>
 
+        {/* Synchronisation */}
+        <div className="card col" style={{ gap: 12 }}>
+          <span className="section-label" style={{ marginBottom: 0 }}>
+            Synchronisation
+          </span>
+          <p className="muted" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+            Les quotas et les fichiers de chaque compte sont rafraîchis automatiquement au
+            démarrage, toutes les 2 minutes, et au retour sur la fenêtre. Dernière synchro :{' '}
+            <b>{accounts.length ? formatRelative(lastSyncAt) : 'aucun compte'}</b>.
+          </p>
+          <button
+            className="btn btn-secondary"
+            style={{ alignSelf: 'flex-start' }}
+            onClick={() => syncQuotas()}
+            disabled={syncing || accounts.length === 0}
+          >
+            <RefreshCw size={14} style={syncing ? { animation: 'spin 0.7s linear infinite' } : undefined} />
+            Synchroniser maintenant
+          </button>
+        </div>
+
         {/* Google OAuth */}
         <div className="card col" style={{ gap: 12 }}>
-          <div className="spread">
-            <span className="section-label" style={{ marginBottom: 0 }}>
-              Identifiants Google OAuth
-            </span>
-            {settings.googleConfigured && (
-              <span className="status-pill active">
-                <Check size={12} /> configuré
-              </span>
-            )}
-          </div>
-
-          <p className="muted" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
-            L'application utilise <b>tes propres</b> identifiants OAuth (type « Application de
-            bureau »). Ils sont stockés chiffrés localement via le trousseau du système et ne
-            quittent jamais ta machine.
-          </p>
-
-          <ol className="muted" style={{ fontSize: 12.5, lineHeight: 1.7, paddingLeft: 18 }}>
-            <li>
-              Ouvre{' '}
-              <a onClick={() => window.api.shell.openExternal('https://console.cloud.google.com/')}>
-                Google Cloud Console <ExternalLink size={11} style={{ display: 'inline' }} />
-              </a>{' '}
-              et crée un projet.
-            </li>
-            <li>APIs &amp; Services → Bibliothèque → active « Google Drive API ».</li>
-            <li>
-              Écran de consentement OAuth : type « Externe », ajoute ton adresse comme
-              utilisateur de test, scopes Drive + userinfo.
-            </li>
-            <li>
-              Identifiants → Créer → ID client OAuth → type <b>Application de bureau</b>.
-            </li>
-            <li>Copie le Client ID et le Client Secret ci-dessous.</li>
-          </ol>
-
-          {settings.googleConfigured ? (
-            <button className="btn btn-danger" onClick={clearGoogle}>
-              Supprimer les identifiants
-            </button>
-          ) : (
-            <>
-              <div className="field">
-                <label className="field-label">Client ID</label>
-                <input
-                  className="field-input mono"
-                  value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
-                  placeholder="xxxxx.apps.googleusercontent.com"
-                />
-              </div>
-              <div className="field">
-                <label className="field-label">Client Secret</label>
-                <input
-                  className="field-input mono"
-                  type="password"
-                  value={clientSecret}
-                  onChange={(e) => setClientSecret(e.target.value)}
-                  placeholder="GOCSPX-…"
-                />
-              </div>
-              <button className="btn btn-primary" onClick={saveGoogle} disabled={busy}>
-                <KeyRound size={14} /> Enregistrer
-              </button>
-            </>
-          )}
+          <span className="section-label" style={{ marginBottom: 0 }}>
+            Identifiants Google OAuth
+          </span>
+          <GoogleSetup />
         </div>
 
         <p className="muted" style={{ fontSize: 12 }}>

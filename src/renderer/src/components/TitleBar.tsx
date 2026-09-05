@@ -1,23 +1,9 @@
 import { RefreshCw } from 'lucide-react'
-import { useState } from 'react'
 import { useStore } from '../store'
+import { formatRelative } from '../lib/format'
 
 export default function TitleBar(): JSX.Element {
-  const { loadAll, toast } = useStore()
-  const [syncing, setSyncing] = useState(false)
-
-  async function syncAll(): Promise<void> {
-    setSyncing(true)
-    try {
-      await window.api.accounts.syncAll()
-      await loadAll()
-      toast('Comptes synchronisés', 'success')
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Échec de la synchronisation', 'error')
-    } finally {
-      setSyncing(false)
-    }
-  }
+  const { syncing, lastSyncAt, accounts, syncQuotas } = useStore()
 
   return (
     <div className="titlebar">
@@ -30,14 +16,19 @@ export default function TitleBar(): JSX.Element {
       <span className="titlebar-title">Drive Backup Manager</span>
 
       <div className="titlebar-actions">
+        {accounts.length > 0 && (
+          <span style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>
+            {syncing ? 'Synchronisation…' : `à jour ${formatRelative(lastSyncAt)}`}
+          </span>
+        )}
         <button
           className="icon-btn"
-          onClick={syncAll}
-          disabled={syncing}
-          data-tooltip="Synchroniser les quotas"
+          onClick={() => syncQuotas()}
+          disabled={syncing || accounts.length === 0}
+          data-tooltip="Synchroniser maintenant"
           data-tooltip-dir="left-down"
         >
-          <RefreshCw size={15} className={syncing ? 'spin-anim' : ''} style={syncing ? { animation: 'spin 0.7s linear infinite' } : undefined} />
+          <RefreshCw size={15} style={syncing ? { animation: 'spin 0.7s linear infinite' } : undefined} />
         </button>
       </div>
     </div>
