@@ -1,0 +1,143 @@
+import { create } from 'zustand'
+import type {
+  Account,
+  AppSettings,
+  BackupJob,
+  FileMeta,
+  SyncLog,
+  TransferProgress,
+  VirtualFolder,
+  DashboardStats,
+  RecentActivity
+} from '@shared/types'
+
+const api = window.api
+
+export type ViewName =
+  | 'dashboard'
+  | 'files'
+  | 'accounts'
+  | 'backup'
+  | 'logs'
+  | 'settings'
+  | 'folder'
+  | 'shared'
+
+export interface ToastMsg {
+  id: number
+  message: string
+  type: 'success' | 'error' | 'info'
+}
+
+interface AppStore {
+  view: ViewName
+  activeFolderId: string | null
+  settings: AppSettings
+
+  accounts: Account[]
+  files: FileMeta[]
+  folders: VirtualFolder[]
+  jobs: BackupJob[]
+  logs: SyncLog[]
+  stats: DashboardStats | null
+  recent: RecentActivity[]
+
+  transfers: TransferProgress[]
+  toasts: ToastMsg[]
+
+  setView: (v: ViewName, folderId?: string | null) => void
+
+  loadAll: () => Promise<void>
+  loadSettings: () => Promise<void>
+  loadAccounts: () => Promise<void>
+  loadFiles: () => Promise<void>
+  loadFolders: () => Promise<void>
+  loadJobs: () => Promise<void>
+  loadLogs: () => Promise<void>
+  loadDashboard: () => Promise<void>
+
+  applyTheme: () => void
+  setTheme: (t: 'dark' | 'light') => Promise<void>
+
+  pushTransfer: (t: TransferProgress) => void
+  clearFinishedTransfers: () => void
+
+  toast: (message: string, type?: ToastMsg['type']) => void
+  dismissToast: (id: number) => void
+}
+
+export const useStore = create<AppStore>((set, get) => ({
+  view: 'dashboard',
+  activeFolderId: null,
+  settings: { theme: 'dark', googleConfigured: false },
+
+  accounts: [],
+  files: [],
+  folders: [],
+  jobs: [],
+  logs: [],
+  stats: null,
+  recent: [],
+
+  transfers: [],
+  toasts: [],
+
+  setView: (v, folderId = null) => set({ view: v, activeFolderId: folderId }),
+
+  loadAll: async () => {
+    await Promise.all([
+      get().loadSettings(),
+      get().loadAccounts(),
+      get().loadFiles(),
+      get().loadFolders(),
+      get().loadJobs(),
+      get().loadDashboard()
+    ])
+  },
+
+  loadSettings: async () => {
+    const settings = await api.settings.get()
+    set({ settings })
+    get().applyTheme()
+  },
+
+  loadAccounts: async () => set({ accounts: await api.accounts.list() }),
+  loadFiles: async () => set({ files: await api.files.list() }),
+  loadFolders: async () => set({ folders: await api.folders.list() }),
+  loadJobs: async () => set({ jobs: await api.backup.jobs() }),
+  loadLogs: async () => set({ logs: await api.logs.list({ limit: 300 }) }),
+  loadDashboard: async () => {
+    const [stats, recent] = await Promise.all([api.dashboard.stats(), api.dashboard.recent()])
+    set({ stats, recent })
+  },
+
+  applyTheme: () => {
+    const t = get().settings.theme === 'light' ? 'light' : 'dark'
+    document.documentElement.setAttribute('data-theme', t)
+  },
+
+  setTheme: async (t) => {
+    const settings = await api.settings.setTheme(t)
+    set({ settings })
+    get().applyTheme()
+  },
+
+  pushTransfer: (t) =>
+    set((s) => {
+      const idx = s.transfers.findIndex((x) => x.id === t.id)
+      const next = [...s.transfers]
+      if (idx >= 0) next[idx] = t
+      else next.unshift(t)
+      return { transfers: next.slice(0, 20) }
+    }),
+
+  clearFinishedTransfers: () =>
+    set((s) => ({ transfers: s.transfers.filter((t) => t.status === 'active') })),
+
+  toast: (message, type = 'info') => {
+    const id = Date.now() + Math.random()
+    set((s) => ({ toasts: [...s.toasts, { id, message, type }] }))
+    setTimeout(() => get().dismissToast(id), 4000)
+  },
+  dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
+}))
