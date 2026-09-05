@@ -18,14 +18,14 @@ export default function TitleBar(): JSX.Element {
       <div className="titlebar-actions">
         {accounts.length > 0 && (
           <span style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>
-            {syncing ? 'Synchronisation…' : `à jour ${formatRelative(lastSyncAt)}`}
+            {syncing ? 'Synchronisation…' : `sync auto · ${formatRelative(lastSyncAt)}`}
           </span>
         )}
         <button
           className="icon-btn"
           onClick={() => syncQuotas()}
           disabled={syncing || accounts.length === 0}
-          data-tooltip="Synchroniser maintenant"
+          data-tooltip="Forcer la synchronisation"
           data-tooltip-dir="left-down"
         >
           <RefreshCw size={15} style={syncing ? { animation: 'spin 0.7s linear infinite' } : undefined} />

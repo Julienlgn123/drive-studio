@@ -50,6 +50,7 @@ export default function App(): JSX.Element {
         loadFolders()
         loadDashboard()
         loadJobs()
+        loadAccounts()
       }
     })
     return off
@@ -62,25 +63,43 @@ export default function App(): JSX.Element {
         loadJobs()
         loadDashboard()
         loadAccounts()
+        loadFiles()
       }
     })
     return off
   }, [])
 
-  // Fraîcheur des données : synchro périodique + au retour sur la fenêtre.
+  // Fraîcheur des données : synchro périodique (pause si fenêtre cachée) +
+  // au retour sur la fenêtre. Rien à faire manuellement.
   useEffect(() => {
-    const interval = setInterval(() => syncQuotas({ silent: true, minIntervalMs: 90_000 }), 120_000)
+    const interval = setInterval(() => {
+      if (document.hidden) return
+      syncQuotas({ silent: true, minIntervalMs: 45_000 })
+    }, 60_000)
     function onFocus(): void {
-      syncQuotas({ silent: true, minIntervalMs: 30_000 })
+      syncQuotas({ silent: true, minIntervalMs: 20_000 })
       loadJobs()
       loadDashboard()
     }
+    function onVisible(): void {
+      if (!document.hidden) onFocus()
+    }
     window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       clearInterval(interval)
       window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [])
+
+  // Chaque changement de page rafraîchit ses données (throttlé).
+  useEffect(() => {
+    syncQuotas({ silent: true, minIntervalMs: 15_000 })
+    loadDashboard()
+    loadJobs()
+    loadFolders()
+  }, [view])
 
   // Drag & drop de fichiers n'importe où dans la fenêtre → upload
   useEffect(() => {
