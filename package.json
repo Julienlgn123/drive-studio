@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "Gestionnaire multi-comptes Google Drive : centralisation, distribution intelligente et backup",
   "author": {
-    "name": "Julienlgn123"
+    "name": "Julienlgn123",
+    "email": "129546749+Julienlgn123@users.noreply.github.com"
   },
   "main": "out/main/index.js",
   "scripts": {
@@ -13,9 +14,9 @@
     "start": "electron-vite dev",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "postinstall": "electron-builder install-app-deps",
-    "dist": "electron-vite build && electron-builder --win --publish never",
-    "dist:mac": "electron-vite build && electron-builder --mac --publish never",
-    "dist:linux": "electron-vite build && electron-builder --linux --publish never"
+    "dist": "electron-vite build && electron-builder --win",
+    "dist:mac": "electron-vite build && electron-builder --mac",
+    "dist:linux": "electron-vite build && electron-builder --linux"
   },
   "build": {
     "appId": "com.gdrive-backup-manager.app",
@@ -56,10 +57,14 @@
         { "target": "dmg", "arch": ["x64", "arm64"] },
         { "target": "zip", "arch": ["x64", "arm64"] }
       ],
+      "artifactName": "Drive-Backup-Manager-${version}-${arch}.${ext}",
       "icon": "resources/icon.png",
-      "category": "public.app-category.utilities"
+      "category": "public.app-category.utilities",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
     },
     "dmg": {
+      "title": "Drive Backup Manager ${version}",
       "artifactName": "Drive-Backup-Manager-${version}-${arch}.dmg"
     },
     "linux": {
@@ -68,8 +73,7 @@
         { "target": "deb", "arch": ["x64"] }
       ],
       "icon": "resources/icon.png",
-      "category": "Utility",
-      "maintainer": "Julienlgn123 <julienlgn123@users.noreply.github.com>"
+      "category": "Utility"
     },
     "appImage": {
       "artifactName": "Drive-Backup-Manager-${version}.AppImage"
