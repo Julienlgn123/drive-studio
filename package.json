@@ -68,7 +68,8 @@
         { "target": "deb", "arch": ["x64"] }
       ],
       "icon": "resources/icon.png",
-      "category": "Utility"
+      "category": "Utility",
+      "maintainer": "Julienlgn123 <julienlgn123@users.noreply.github.com>"
     },
     "appImage": {
       "artifactName": "Drive-Backup-Manager-${version}.AppImage"
