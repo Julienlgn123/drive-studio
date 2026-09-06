@@ -23,8 +23,21 @@ import type {
 
 let db: Database.Database
 
+export function getDbPath(): string {
+  return join(app.getPath('userData'), 'drive-backup-manager.db')
+}
+
+/** Force l'écriture du WAL dans le fichier .db principal (avant une copie/export à froid). */
+export function checkpointDb(): void {
+  db?.pragma('wal_checkpoint(TRUNCATE)')
+}
+
+export function closeDb(): void {
+  db?.close()
+}
+
 export function initDb(): void {
-  const dbPath = join(app.getPath('userData'), 'drive-backup-manager.db')
+  const dbPath = getDbPath()
   db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')

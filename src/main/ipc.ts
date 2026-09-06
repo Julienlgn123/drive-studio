@@ -27,6 +27,7 @@ import {
 import { listRevisions } from './google/drive'
 import { runBackup, isBackupRunning } from './backup'
 import { exportFiles } from './zipexport'
+import { exportData, importData, resetAllData, openBackupsFolder, latestBackupInfo } from './datatransfer'
 import { computeNextRun } from './db'
 import type {
   AccountRole,
@@ -233,6 +234,21 @@ export function registerIpc(): void {
       status: l.status,
       timestamp: l.timestamp
     }))
+  )
+
+  // ─── Sauvegarde / transfert / suppression totale ────────────────────────
+  ipcMain.handle('datatransfer:export', (_, passphrase: string) => exportData(getWin(), passphrase))
+  ipcMain.handle('datatransfer:import', (_, passphrase: string) => importData(getWin(), passphrase))
+  ipcMain.handle('datatransfer:openBackupsFolder', () => {
+    openBackupsFolder()
+    return true
+  })
+  ipcMain.handle('datatransfer:latestBackup', () => latestBackupInfo())
+  ipcMain.handle('datatransfer:resetAll', () =>
+    resetAllData(
+      getWin(),
+      db.getAccounts().map((a) => a.id)
+    )
   )
 
   // ─── Divers ──────────────────────────────────────────────────────────────

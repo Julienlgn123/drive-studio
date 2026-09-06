@@ -182,6 +182,16 @@ const api = {
   shell: {
     openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url)
   },
+  datatransfer: {
+    export: (passphrase: string): Promise<string | null> =>
+      ipcRenderer.invoke('datatransfer:export', passphrase),
+    import: (passphrase: string): Promise<boolean> =>
+      ipcRenderer.invoke('datatransfer:import', passphrase),
+    openBackupsFolder: (): Promise<boolean> => ipcRenderer.invoke('datatransfer:openBackupsFolder'),
+    latestBackup: (): Promise<{ name: string; at: number } | null> =>
+      ipcRenderer.invoke('datatransfer:latestBackup'),
+    resetAll: (): Promise<boolean> => ipcRenderer.invoke('datatransfer:resetAll')
+  },
   clipboard: {
     write: (text: string): Promise<void> => ipcRenderer.invoke('clipboard:write', text)
   },
