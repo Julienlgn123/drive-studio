@@ -361,7 +361,7 @@ kbd {
 @keyframes pulse-dot { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.85); } }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Classes propres à Drive Backup Manager
+   Classes propres à Drive Studio
    ───────────────────────────────────────────────────────────────────────── */
 
 .view-scroll { flex: 1; overflow-y: auto; }

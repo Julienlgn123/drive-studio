@@ -28,11 +28,11 @@ function createTrayIcon(): Electron.NativeImage {
 function createTray(): void {
   try {
     tray = new Tray(createTrayIcon())
-    tray.setToolTip('Drive Backup Manager')
+    tray.setToolTip('Drive Studio')
     tray.setContextMenu(
       Menu.buildFromTemplate([
         {
-          label: 'Ouvrir Drive Backup Manager',
+          label: 'Ouvrir Drive Studio',
           click: () => {
             mainWindow?.show()
             mainWindow?.focus()

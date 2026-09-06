@@ -134,7 +134,7 @@ export async function importData(window: BrowserWindow, passphrase: string): Pro
   }
   const dbFile = zip.file('drive-backup-manager.db')
   if (!dbFile) {
-    throw new Error('Cette archive ne ressemble pas à une sauvegarde Drive Backup Manager.')
+    throw new Error('Cette archive ne ressemble pas à une sauvegarde Drive Studio.')
   }
 
   const { response } = await dialog.showMessageBox(window, {

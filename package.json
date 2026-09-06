@@ -1,6 +1,6 @@
 {
   "name": "gdrive-backup-manager",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Gestionnaire multi-comptes Google Drive : centralisation, distribution intelligente et backup",
   "author": {
     "name": "Julienlgn123",
@@ -20,7 +20,7 @@
   },
   "build": {
     "appId": "com.gdrive-backup-manager.app",
-    "productName": "Drive Backup Manager",
+    "productName": "Drive Studio",
     "directories": {
       "output": "dist-installer"
     },
@@ -46,26 +46,26 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Drive Backup Manager",
-      "artifactName": "Drive-Backup-Manager-Setup-${version}.${ext}"
+      "shortcutName": "Drive Studio",
+      "artifactName": "Drive-Studio-Setup-${version}.${ext}"
     },
     "portable": {
-      "artifactName": "Drive-Backup-Manager-Portable-${version}.exe"
+      "artifactName": "Drive-Studio-Portable-${version}.exe"
     },
     "mac": {
       "target": [
         { "target": "dmg", "arch": ["x64", "arm64"] },
         { "target": "zip", "arch": ["x64", "arm64"] }
       ],
-      "artifactName": "Drive-Backup-Manager-${version}-${arch}.${ext}",
+      "artifactName": "Drive-Studio-${version}-${arch}.${ext}",
       "icon": "resources/icon.png",
       "category": "public.app-category.utilities",
       "hardenedRuntime": false,
       "gatekeeperAssess": false
     },
     "dmg": {
-      "title": "Drive Backup Manager ${version}",
-      "artifactName": "Drive-Backup-Manager-${version}-${arch}.dmg"
+      "title": "Drive Studio ${version}",
+      "artifactName": "Drive-Studio-${version}-${arch}.dmg"
     },
     "linux": {
       "target": [
@@ -76,10 +76,10 @@
       "category": "Utility"
     },
     "appImage": {
-      "artifactName": "Drive-Backup-Manager-${version}.AppImage"
+      "artifactName": "Drive-Studio-${version}.AppImage"
     },
     "deb": {
-      "artifactName": "Drive-Backup-Manager-${version}.deb"
+      "artifactName": "Drive-Studio-${version}.deb"
     },
     "publish": {
       "provider": "github",

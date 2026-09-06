@@ -280,7 +280,7 @@ export default function SettingsView(): JSX.Element {
         </div>
 
         <p className="muted" style={{ fontSize: 12 }}>
-          Drive Backup Manager · 100 % local · aucun serveur cloud.
+          Drive Studio · 100 % local · aucun serveur cloud.
         </p>
       </div>
     </div>

@@ -21,7 +21,7 @@ align-items:center;justify-content:center;height:100vh;margin:0}
 padding:32px 40px;text-align:center;max-width:360px}
 h1{font-size:18px;margin:0 0 8px}p{color:rgba(255,255,255,.55);font-size:14px;margin:0}</style>
 </head><body><div class="card"><h1>✓ Compte Google lié</h1>
-<p>Vous pouvez fermer cet onglet et revenir à Drive Backup Manager.</p></div></body></html>`
+<p>Vous pouvez fermer cet onglet et revenir à Drive Studio.</p></div></body></html>`
 
 function createOAuthClient(redirectUri: string): OAuth2Client {
   const creds = getGoogleCredentials()

@@ -1,4 +1,4 @@
-# Drive Backup Manager
+# Drive Studio
 
 Application desktop (Electron + React + TypeScript) qui centralise plusieurs comptes
 Google Drive en un seul endroit : vue unifiée des fichiers, **distribution automatique**
@@ -44,7 +44,7 @@ npm run dist:linux    # AppImage + deb
 
 ### Builds multi-plateformes (CI)
 
-Un workflow GitHub Actions (`.github/workflows/build.yml`) compile automatiquement
+Un workflow GitHub Actions (`.github/workflows/release.yml`) compile automatiquement
 l'app sur les trois OS à chaque tag `v*` (ou manuellement via *Actions → Run workflow*) :
 
 - **Windows** (`nsis` + portable, x64) sur un runner `windows-latest`.

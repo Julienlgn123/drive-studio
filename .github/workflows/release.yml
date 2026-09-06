@@ -119,29 +119,29 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Drive Backup Manager v${{ steps.version.outputs.VERSION }}"
+          name: "Drive Studio v${{ steps.version.outputs.VERSION }}"
           body: |
-            ## ☁️ Drive Backup Manager v${{ steps.version.outputs.VERSION }}
+            ## ☁️ Drive Studio v${{ steps.version.outputs.VERSION }}
 
             ### 🪟 Windows
             | Fichier | Description |
             |---|---|
-            | `Drive-Backup-Manager-Setup-*.exe` | Installateur (recommandé) |
-            | `Drive-Backup-Manager-Portable-*.exe` | Portable — clé USB, aucune installation |
+            | `Drive-Studio-Setup-*.exe` | Installateur (recommandé) |
+            | `Drive-Studio-Portable-*.exe` | Portable — clé USB, aucune installation |
 
             ### 🍎 macOS
             | Fichier | Description |
             |---|---|
-            | `Drive-Backup-Manager-*-x64.dmg` | Mac Intel (2020 et avant) |
-            | `Drive-Backup-Manager-*-arm64.dmg` | Mac Apple Silicon M1/M2/M3/M4 |
+            | `Drive-Studio-*-x64.dmg` | Mac Intel (2020 et avant) |
+            | `Drive-Studio-*-arm64.dmg` | Mac Apple Silicon M1/M2/M3/M4 |
 
             > Première ouverture sur macOS : clic droit → **Ouvrir** → **Ouvrir quand même**
 
             ### 🐧 Linux
             | Fichier | Description |
             |---|---|
-            | `Drive-Backup-Manager-*.AppImage` | Universel — toutes les distros |
-            | `Drive-Backup-Manager-*.deb` | Debian / Ubuntu / Mint |
+            | `Drive-Studio-*.AppImage` | Universel — toutes les distros |
+            | `Drive-Studio-*.deb` | Debian / Ubuntu / Mint |
 
             ---
             🔑 Chaque personne relie ses propres comptes Google (identifiants OAuth

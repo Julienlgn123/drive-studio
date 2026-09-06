@@ -13,7 +13,7 @@ export default function TitleBar(): JSX.Element {
         <div className="titlebar-btn maximize" onClick={() => window.api.window.maximize()} />
       </div>
 
-      <span className="titlebar-title">Drive Backup Manager</span>
+      <span className="titlebar-title">Drive Studio</span>
 
       <div className="titlebar-actions">
         {accounts.length > 0 && (
