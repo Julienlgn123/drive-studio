@@ -8,6 +8,7 @@ interface StoredSettings {
   theme?: 'dark' | 'light'
   googleClientId?: string // chiffré
   googleClientSecret?: string // chiffré
+  launchAtStartup?: boolean
 }
 
 function settingsPath(): string {
@@ -31,13 +32,24 @@ export function getPublicSettings(): AppSettings {
   const raw = readRaw()
   return {
     theme: raw.theme ?? 'dark',
-    googleConfigured: !!(raw.googleClientId && raw.googleClientSecret)
+    googleConfigured: !!(raw.googleClientId && raw.googleClientSecret),
+    launchAtStartup: !!raw.launchAtStartup
   }
 }
 
 export function setTheme(theme: 'dark' | 'light'): void {
   const raw = readRaw()
   raw.theme = theme
+  writeRaw(raw)
+}
+
+export function getLaunchAtStartup(): boolean {
+  return !!readRaw().launchAtStartup
+}
+
+export function setLaunchAtStartup(enabled: boolean): void {
+  const raw = readRaw()
+  raw.launchAtStartup = enabled
   writeRaw(raw)
 }
 

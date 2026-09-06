@@ -9,11 +9,12 @@ import {
   getAccounts,
   getFileByDriveId,
   pruneMissingFiles,
+  setAccountTokens,
   updateAccount,
   updateFileMeta
 } from '../db'
 import { getQuota, listFiles } from './drive'
-import { revokeAccount, runOAuthFlow } from './oauth'
+import { revokeAccount, runOAuthFlow, getAuthedClient } from './oauth'
 import { broadcast } from '../events'
 import type { Account, AccountRole } from '@shared/types'
 
@@ -72,6 +73,66 @@ export async function addAccount(): Promise<Account> {
     label: `${email}${imported ? ` · ${imported} fichier(s) déjà présents` : ''}`
   })
   return getAccount(tmp.id)!
+}
+
+/**
+ * Relance le flow OAuth pour un compte existant (typiquement en statut
+ * 'error' suite à un refresh_token expiré/révoqué) et remplace ses tokens.
+ * Refuse si l'e-mail obtenu ne correspond pas au compte visé.
+ */
+export async function reconnectAccount(accountId: string): Promise<Account> {
+  const acc = getAccount(accountId)
+  if (!acc) throw new Error('Compte introuvable : ' + accountId)
+
+  const { tokens, email } = await runOAuthFlow()
+  if (email.toLowerCase() !== acc.email.toLowerCase()) {
+    throw new Error(
+      `Le compte Google connecté (${email}) ne correspond pas à ${acc.email}. ` +
+        'Reconnecte-toi avec le bon compte Google.'
+    )
+  }
+
+  setAccountTokens(accountId, tokens)
+  updateAccount(accountId, { status: 'active' })
+
+  try {
+    const q = await getQuota(accountId)
+    updateAccount(accountId, { quotaTotal: q.total, quotaUsed: q.used, lastSync: Date.now() })
+  } catch {
+    // le compte reste 'active' : la quota sera retentée au prochain sync
+  }
+
+  addLog({ action: 'account_add', accountId, status: 'success', label: `${email} · reconnecté` })
+  return getAccount(accountId)!
+}
+
+/**
+ * Rafraîchit les tokens de tous les comptes (typiquement au lancement de
+ * l'app) : évite que le refresh_token expire faute d'utilisation, et
+ * détecte tôt les comptes qui nécessitent une reconnexion manuelle.
+ */
+export async function refreshAllAccountTokens(): Promise<{ refreshed: number; failed: string[] }> {
+  let refreshed = 0
+  const failed: string[] = []
+  for (const acc of getAccounts()) {
+    try {
+      await getAuthedClient(acc.id, { forceRefresh: true })
+      if (acc.status === 'error') updateAccount(acc.id, { status: 'active' })
+      refreshed++
+    } catch (err) {
+      failed.push(acc.email)
+      updateAccount(acc.id, { status: 'error' })
+      addLog({
+        action: 'account_add',
+        accountId: acc.id,
+        status: 'failed',
+        label: `${acc.email} · refresh token au démarrage`,
+        errorDetails: err instanceof Error ? err.message : String(err)
+      })
+    }
+  }
+  broadcast('accounts:tokensRefreshed', { refreshed, failed })
+  return { refreshed, failed }
 }
 
 export async function removeAccount(accountId: string): Promise<void> {

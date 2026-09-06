@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { UserPlus, RefreshCw, Trash2, DownloadCloud, AlertCircle, Wand2 } from 'lucide-react'
+import { UserPlus, RefreshCw, Trash2, DownloadCloud, AlertCircle, Wand2, PlugZap } from 'lucide-react'
 import { useStore } from '../store'
 import ProgressBar from '../components/ProgressBar'
 import { mapAuthError } from '../lib/authErrors'
@@ -62,6 +62,19 @@ export default function AccountsView(): JSX.Element {
       )
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Échec du scan', 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function reconnect(id: string): Promise<void> {
+    setBusyId(id)
+    try {
+      await window.api.accounts.reconnect(id)
+      await loadAll()
+      toast('Compte reconnecté ✓', 'success')
+    } catch (err) {
+      toast(mapAuthError(err), 'error')
     } finally {
       setBusyId(null)
     }
@@ -184,6 +197,7 @@ export default function AccountsView(): JSX.Element {
                 onScan={scanDrive}
                 onOpenFiles={openAccountFiles}
                 onRemove={remove}
+                onReconnect={reconnect}
               />
             ))}
           </div>
@@ -201,7 +215,8 @@ function AccountCard({
   onSync,
   onScan,
   onOpenFiles,
-  onRemove
+  onRemove,
+  onReconnect
 }: {
   account: Account
   index: number
@@ -211,6 +226,7 @@ function AccountCard({
   onScan: (id: string) => void
   onOpenFiles: (id: string) => void
   onRemove: (id: string, email: string) => void
+  onReconnect: (id: string) => void
 }): JSX.Element {
   const ratio = a.quotaTotal > 0 ? a.quotaUsed / a.quotaTotal : 0
   const total = a.filesCount ?? 0
@@ -247,6 +263,34 @@ function AccountCard({
         </div>
         <ProgressBar ratio={ratio} />
       </div>
+
+      {a.status === 'error' && (
+        <div
+          className="row"
+          style={{
+            gap: 8,
+            alignItems: 'center',
+            fontSize: 12,
+            color: 'var(--danger, #f87171)',
+            background: 'var(--warning-dim)',
+            border: '1px solid rgba(248,113,113,0.3)',
+            borderRadius: 8,
+            padding: '6px 10px'
+          }}
+        >
+          <AlertCircle size={13} />
+          <span style={{ flex: 1 }}>
+            Connexion perdue (accès révoqué ou expiré) — les fichiers restent sur Drive.
+          </span>
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={() => onReconnect(a.id)}
+            disabled={busy}
+          >
+            <PlugZap size={12} /> Reconnecter
+          </button>
+        </div>
+      )}
 
       <div className="role-toggle">
         <button className={a.role === 'primary' ? 'on' : ''} onClick={() => onRole(a.id, 'primary')}>

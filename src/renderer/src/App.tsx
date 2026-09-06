@@ -65,10 +65,24 @@ export default function App(): JSX.Element {
         loadDashboard()
       }
     })
+    // Refresh des tokens au lancement (voir main/index.ts) : si un ou
+    // plusieurs comptes n'ont pas pu être rafraîchis, on prévient l'utilisateur
+    // (refresh_token révoqué/expiré → passe en statut erreur, bouton
+    // "Reconnecter" disponible sur la page Comptes).
+    const offTokens = window.api.accounts.onTokensRefreshed((p) => {
+      loadAccounts()
+      if (p.failed.length) {
+        toast(
+          `${p.failed.length} compte(s) à reconnecter : ${p.failed.join(', ')}`,
+          'error'
+        )
+      }
+    })
     return () => {
       offTransfer()
       offScanning()
       offScanned()
+      offTokens()
     }
   }, [])
 

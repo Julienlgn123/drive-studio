@@ -46,13 +46,17 @@ const api = {
     setGoogle: (clientId: string, clientSecret: string): Promise<AppSettings> =>
       ipcRenderer.invoke('settings:setGoogle', { clientId, clientSecret }),
     clearGoogle: (): Promise<AppSettings> => ipcRenderer.invoke('settings:clearGoogle'),
-    hasGoogle: (): Promise<boolean> => ipcRenderer.invoke('settings:hasGoogle')
+    hasGoogle: (): Promise<boolean> => ipcRenderer.invoke('settings:hasGoogle'),
+    setLaunchAtStartup: (enabled: boolean): Promise<AppSettings> =>
+      ipcRenderer.invoke('settings:setLaunchAtStartup', enabled)
   },
   accounts: {
     list: (): Promise<Account[]> => ipcRenderer.invoke('accounts:list'),
     get: (id: string): Promise<Account | null> => ipcRenderer.invoke('accounts:get', id),
     add: (): Promise<Account> => ipcRenderer.invoke('accounts:add'),
     remove: (id: string): Promise<void> => ipcRenderer.invoke('accounts:remove', id),
+    /** Relance l'OAuth pour un compte existant (ex: refresh_token expiré). */
+    reconnect: (id: string): Promise<Account> => ipcRenderer.invoke('accounts:reconnect', id),
     setRole: (id: string, role: AccountRole): Promise<Account> =>
       ipcRenderer.invoke('accounts:setRole', id, role),
     sync: (id: string): Promise<Account | null> => ipcRenderer.invoke('accounts:sync', id),
@@ -72,7 +76,10 @@ const api = {
       on<{
         accountId: string
         result: { added: number; updated: number; removed: number; total: number }
-      }>('account:filesSynced', cb)
+      }>('account:filesSynced', cb),
+    /** Notifié après le refresh automatique des tokens au lancement de l'app. */
+    onTokensRefreshed: (cb: (p: { refreshed: number; failed: string[] }) => void) =>
+      on<{ refreshed: number; failed: string[] }>('accounts:tokensRefreshed', cb)
   },
   files: {
     list: (filters?: FileFilters): Promise<FileMeta[]> =>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Search,
   Upload,
@@ -11,7 +11,9 @@ import {
   FolderInput,
   RefreshCw,
   ExternalLink,
-  Cloud
+  Cloud,
+  X,
+  CheckSquare
 } from 'lucide-react'
 import { useStore } from '../store'
 import ContextMenu from '../components/ContextMenu'
@@ -52,6 +54,9 @@ export default function FilesView({ folderId }: Props): JSX.Element {
   const [menu, setMenu] = useState<{ x: number; y: number; file: FileMeta } | null>(null)
   const [infoFile, setInfoFile] = useState<FileMeta | null>(null)
   const [shareFile, setShareFile] = useState<FileMeta | null>(null)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  // Dernière ligne cliquée : sert de point de départ pour la sélection par plage (Shift+clic).
+  const lastClickedId = useRef<string | null>(null)
 
   const folder = folders.find((f) => f.id === folderId)
   const scanning = scanningAccountId !== null
@@ -91,6 +96,67 @@ export default function FilesView({ folderId }: Props): JSX.Element {
       n.has(id) ? n.delete(id) : n.add(id)
       return n
     })
+    lastClickedId.current = id
+  }
+
+  /**
+   * Clic n'importe où sur la ligne (hors boutons/liens) : sélectionne sans
+   * avoir à viser la case à cocher. Shift+clic étend la sélection depuis la
+   * dernière ligne cliquée (comme un explorateur de fichiers classique).
+   */
+  function onRowClick(id: string, e: React.MouseEvent): void {
+    if (e.shiftKey && lastClickedId.current) {
+      const ids = rows.map((r) => r.id)
+      const a = ids.indexOf(lastClickedId.current)
+      const b = ids.indexOf(id)
+      if (a !== -1 && b !== -1) {
+        const [from, to] = a < b ? [a, b] : [b, a]
+        setSelected((s) => {
+          const n = new Set(s)
+          for (let i = from; i <= to; i++) n.add(ids[i])
+          return n
+        })
+        return
+      }
+    }
+    toggle(id)
+  }
+
+  function selectAll(): void {
+    setSelected(new Set(rows.map((r) => r.id)))
+  }
+
+  function clearSelection(): void {
+    setSelected(new Set())
+  }
+
+  async function deleteSelected(): Promise<void> {
+    const ids = [...selected]
+    if (!ids.length) return
+    if (
+      !window.confirm(
+        `Supprimer ${ids.length} fichier${ids.length > 1 ? 's' : ''} de Google Drive ? Irréversible.`
+      )
+    )
+      return
+    setBulkDeleting(true)
+    let ok = 0
+    let failed = 0
+    for (const id of ids) {
+      try {
+        await window.api.files.delete(id)
+        ok++
+      } catch {
+        failed++
+      }
+    }
+    await Promise.all([loadFiles(), loadFolders(), loadDashboard()])
+    setSelected(new Set())
+    setBulkDeleting(false)
+    toast(
+      `${ok} fichier(s) supprimé(s)` + (failed ? ` · ${failed} en échec` : ''),
+      failed ? 'error' : 'success'
+    )
   }
 
   async function pickUpload(): Promise<void> {
@@ -170,13 +236,28 @@ export default function FilesView({ folderId }: Props): JSX.Element {
               <span className="muted" style={{ fontSize: 12 }}>
                 {selected.size} sélectionné(s)
               </span>
+              <button className="btn btn-sm btn-secondary" onClick={clearSelection}>
+                <X size={13} /> Désélectionner
+              </button>
               <button className="btn btn-sm btn-secondary" onClick={() => exportSelected(false)}>
                 <Download size={13} /> Exporter
               </button>
               <button className="btn btn-sm btn-secondary" onClick={() => exportSelected(true)}>
                 <FileArchive size={13} /> ZIP
               </button>
+              <button
+                className="btn btn-sm btn-danger"
+                onClick={deleteSelected}
+                disabled={bulkDeleting}
+              >
+                <Trash2 size={13} /> Supprimer ({selected.size})
+              </button>
             </>
+          )}
+          {rows.length > 0 && selected.size === 0 && (
+            <button className="btn btn-sm btn-secondary" onClick={selectAll}>
+              <CheckSquare size={13} /> Tout sélectionner
+            </button>
           )}
           <button
             className="btn btn-sm btn-secondary"
@@ -256,7 +337,17 @@ export default function FilesView({ folderId }: Props): JSX.Element {
             <table className="data">
               <thead>
                 <tr>
-                  <th style={{ width: 32 }}></th>
+                  <th style={{ width: 32 }}>
+                    <input
+                      type="checkbox"
+                      className="checkbox"
+                      checked={rows.length > 0 && selected.size === rows.length}
+                      ref={(el) => {
+                        if (el) el.indeterminate = selected.size > 0 && selected.size < rows.length
+                      }}
+                      onChange={() => (selected.size === rows.length ? clearSelection() : selectAll())}
+                    />
+                  </th>
                   <th>Nom</th>
                   <th style={{ width: 90 }}>Taille</th>
                   <th style={{ width: 110 }}>Type</th>
@@ -272,16 +363,20 @@ export default function FilesView({ folderId }: Props): JSX.Element {
                   return (
                     <tr
                       key={f.id}
+                      className={selected.has(f.id) ? 'row-selected' : undefined}
+                      onClick={(e) => onRowClick(f.id, e)}
                       onContextMenu={(e) => {
                         e.preventDefault()
                         setMenu({ x: e.clientX, y: e.clientY, file: f })
                       }}
+                      style={{ cursor: 'pointer' }}
                     >
                       <td>
                         <input
                           type="checkbox"
                           className="checkbox"
                           checked={selected.has(f.id)}
+                          onClick={(e) => e.stopPropagation()}
                           onChange={() => toggle(f.id)}
                         />
                       </td>
@@ -311,7 +406,10 @@ export default function FilesView({ folderId }: Props): JSX.Element {
                               className="icon-btn"
                               style={{ width: 20, height: 20 }}
                               title="Ouvrir dans Google Drive"
-                              onClick={() => window.api.shell.openExternal(f.webViewLink!)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                window.api.shell.openExternal(f.webViewLink!)
+                              }}
                             >
                               <ExternalLink size={11} />
                             </button>
@@ -332,12 +430,20 @@ export default function FilesView({ folderId }: Props): JSX.Element {
                       <td>{formatRelative(f.modifiedAt || f.uploadedAt)}</td>
                       <td>
                         <div className="cell-actions">
-                          <button className="icon-btn" onClick={() => download(f)} data-tooltip="Télécharger">
+                          <button
+                            className="icon-btn"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              download(f)
+                            }}
+                            data-tooltip="Télécharger"
+                          >
                             <Download size={14} />
                           </button>
                           <button
                             className="icon-btn"
                             onClick={(e) => {
+                              e.stopPropagation()
                               const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
                               setMenu({ x: r.left, y: r.bottom, file: f })
                             }}

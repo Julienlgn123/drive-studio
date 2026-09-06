@@ -10,6 +10,7 @@ import {
 import {
   addAccount,
   removeAccount,
+  reconnectAccount,
   setAccountRole,
   syncAccountQuota,
   syncAllQuotas,
@@ -77,6 +78,7 @@ export function registerIpc(): void {
   ipcMain.handle('accounts:get', (_, id: string) => db.getAccount(id))
   ipcMain.handle('accounts:add', () => addAccount())
   ipcMain.handle('accounts:remove', (_, id: string) => removeAccount(id))
+  ipcMain.handle('accounts:reconnect', (_, id: string) => reconnectAccount(id))
   ipcMain.handle('accounts:setRole', (_, id: string, role: AccountRole) => setAccountRole(id, role))
   // Sync léger : quotas uniquement (un appel about.get par compte).
   ipcMain.handle('accounts:sync', async (_, id: string) => {

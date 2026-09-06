@@ -74,6 +74,7 @@ interface AppStore {
 
   applyTheme: () => void
   setTheme: (t: 'dark' | 'light') => Promise<void>
+  setLaunchAtStartup: (enabled: boolean) => Promise<void>
 
   pushTransfer: (t: TransferProgress) => void
   clearFinishedTransfers: () => void
@@ -181,6 +182,11 @@ export const useStore = create<AppStore>((set, get) => ({
     const settings = await api.settings.setTheme(t)
     set({ settings })
     get().applyTheme()
+  },
+
+  setLaunchAtStartup: async (enabled) => {
+    const settings = await api.settings.setLaunchAtStartup(enabled)
+    set({ settings })
   },
 
   pushTransfer: (t) =>

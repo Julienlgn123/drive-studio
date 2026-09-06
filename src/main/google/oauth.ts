@@ -155,7 +155,10 @@ export function runOAuthFlow(): Promise<{
  * Renvoie un client OAuth2 authentifié pour un compte, en rafraîchissant
  * le token si besoin. Les nouveaux tokens sont ré-écrits chiffrés en base.
  */
-export async function getAuthedClient(accountId: string): Promise<OAuth2Client> {
+export async function getAuthedClient(
+  accountId: string,
+  opts: { forceRefresh?: boolean } = {}
+): Promise<OAuth2Client> {
   const creds = getGoogleCredentials()
   if (!creds) throw new Error('Identifiants Google non configurés.')
   const stored = getAccountTokens(accountId)
@@ -177,8 +180,8 @@ export async function getAuthedClient(accountId: string): Promise<OAuth2Client> 
     })
   })
 
-  // Force un refresh si le token expire dans moins de 2 min.
-  if (!stored.expiry || stored.expiry - Date.now() < 120_000) {
+  // Force un refresh si demandé explicitement, ou si le token expire dans moins de 2 min.
+  if (opts.forceRefresh || !stored.expiry || stored.expiry - Date.now() < 120_000) {
     const res = await client.getAccessToken()
     if (res.token) {
       setAccountTokens(accountId, { accessToken: res.token })

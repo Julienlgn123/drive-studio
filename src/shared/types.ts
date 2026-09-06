@@ -168,6 +168,8 @@ export interface AppSettings {
   theme?: 'dark' | 'light'
   /** Présence seule exposée au renderer, jamais la valeur. */
   googleConfigured?: boolean
+  /** Lance l'app (masquée, dans la barre système) à la connexion à Windows/macOS/Linux. */
+  launchAtStartup?: boolean
 }
 
 export interface DriveRevision {

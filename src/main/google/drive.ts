@@ -4,6 +4,7 @@ import { pipeline } from 'stream/promises'
 import { google, type drive_v3 } from 'googleapis'
 import { getAuthedClient } from './oauth'
 import { HashingCounterStream } from '../checksum'
+import { withRetry } from './retry'
 import type { DriveRevision, ShareRole } from '@shared/types'
 
 async function driveFor(accountId: string): Promise<drive_v3.Drive> {
@@ -19,7 +20,7 @@ export interface DriveQuota {
 
 export async function getQuota(accountId: string): Promise<DriveQuota> {
   const drive = await driveFor(accountId)
-  const res = await drive.about.get({ fields: 'storageQuota,user' })
+  const res = await withRetry(() => drive.about.get({ fields: 'storageQuota,user' }))
   const q = res.data.storageQuota || {}
   // "limit" absent = stockage illimité (Workspace) — on retombe sur une valeur large.
   const total = q.limit ? Number(q.limit) : 5_000_000_000_000
@@ -45,14 +46,16 @@ export async function listFiles(
   const out: RemoteFile[] = []
   let pageToken: string | undefined
   do {
-    const res = await drive.files.list({
-      q: "trashed = false and mimeType != 'application/vnd.google-apps.folder'",
-      spaces: 'drive',
-      fields:
-        'nextPageToken, files(id, name, size, mimeType, md5Checksum, modifiedTime, webViewLink)',
-      pageSize: 1000,
-      pageToken
-    })
+    const res = await withRetry(() =>
+      drive.files.list({
+        q: "trashed = false and mimeType != 'application/vnd.google-apps.folder'",
+        spaces: 'drive',
+        fields:
+          'nextPageToken, files(id, name, size, mimeType, md5Checksum, modifiedTime, webViewLink)',
+        pageSize: 1000,
+        pageToken
+      })
+    )
     for (const f of res.data.files || []) {
       out.push({
         id: f.id!,
@@ -125,7 +128,7 @@ export async function downloadFile(
 
   let total = opts.sizeHint || 0
   if (!total) {
-    const meta = await drive.files.get({ fileId: driveFileId, fields: 'size' })
+    const meta = await withRetry(() => drive.files.get({ fileId: driveFileId, fields: 'size' }))
     total = meta.data.size ? Number(meta.data.size) : 0
   }
 
@@ -142,7 +145,7 @@ export async function downloadFile(
 
 export async function deleteFile(accountId: string, driveFileId: string): Promise<void> {
   const drive = await driveFor(accountId)
-  await drive.files.delete({ fileId: driveFileId })
+  await withRetry(() => drive.files.delete({ fileId: driveFileId }))
 }
 
 const ROLE_MAP: Record<ShareRole, string> = {
@@ -157,12 +160,14 @@ export async function shareFile(
   role: ShareRole
 ): Promise<{ permissionId: string; url: string }> {
   const drive = await driveFor(accountId)
-  const perm = await drive.permissions.create({
-    fileId: driveFileId,
-    requestBody: { type: 'anyone', role: ROLE_MAP[role] },
-    fields: 'id'
-  })
-  const meta = await drive.files.get({ fileId: driveFileId, fields: 'webViewLink' })
+  const perm = await withRetry(() =>
+    drive.permissions.create({
+      fileId: driveFileId,
+      requestBody: { type: 'anyone', role: ROLE_MAP[role] },
+      fields: 'id'
+    })
+  )
+  const meta = await withRetry(() => drive.files.get({ fileId: driveFileId, fields: 'webViewLink' }))
   return {
     permissionId: perm.data.id!,
     url: meta.data.webViewLink || `https://drive.google.com/file/d/${driveFileId}/view`
@@ -175,7 +180,7 @@ export async function unshareFile(
   permissionId: string
 ): Promise<void> {
   const drive = await driveFor(accountId)
-  await drive.permissions.delete({ fileId: driveFileId, permissionId })
+  await withRetry(() => drive.permissions.delete({ fileId: driveFileId, permissionId }))
 }
 
 export async function listRevisions(
@@ -183,10 +188,12 @@ export async function listRevisions(
   driveFileId: string
 ): Promise<DriveRevision[]> {
   const drive = await driveFor(accountId)
-  const res = await drive.revisions.list({
-    fileId: driveFileId,
-    fields: 'revisions(id, modifiedTime, size, keepForever, lastModifyingUser/displayName)'
-  })
+  const res = await withRetry(() =>
+    drive.revisions.list({
+      fileId: driveFileId,
+      fields: 'revisions(id, modifiedTime, size, keepForever, lastModifyingUser/displayName)'
+    })
+  )
   return (res.data.revisions || []).map((r) => ({
     id: r.id!,
     modifiedTime: r.modifiedTime || '',

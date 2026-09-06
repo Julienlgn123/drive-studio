@@ -1,14 +1,72 @@
-import { app, BrowserWindow, shell, ipcMain, session } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, session, Tray, Menu, nativeImage } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
 import { initDb } from './db'
 import { registerIpc } from './ipc'
 import { startScheduler, stopScheduler } from './scheduler'
+import { getLaunchAtStartup, setLaunchAtStartup, getPublicSettings } from './settings'
+import { refreshAllAccountTokens } from './google/accounts'
 
 let mainWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+let isQuitting = false
 
-function createWindow(): void {
+/** Icône minimaliste générée à la volée (aucun asset requis, aucun risque de packaging cassé). */
+function createTrayIcon(): Electron.NativeImage {
+  const size = 16
+  const buf = Buffer.alloc(size * size * 4)
+  for (let i = 0; i < size * size; i++) {
+    buf[i * 4] = 0xf7 // B
+    buf[i * 4 + 1] = 0x8f // G
+    buf[i * 4 + 2] = 0x6f // R
+    buf[i * 4 + 3] = 0xff // A
+  }
+  return nativeImage.createFromBuffer(buf, { width: size, height: size })
+}
+
+function createTray(): void {
+  try {
+    tray = new Tray(createTrayIcon())
+    tray.setToolTip('Drive Backup Manager')
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        {
+          label: 'Ouvrir Drive Backup Manager',
+          click: () => {
+            mainWindow?.show()
+            mainWindow?.focus()
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Quitter',
+          click: () => {
+            isQuitting = true
+            app.quit()
+          }
+        }
+      ])
+    )
+    tray.on('click', () => {
+      mainWindow?.show()
+      mainWindow?.focus()
+    })
+  } catch {
+    tray = null
+  }
+}
+
+/** Aligne l'enregistrement OS (démarrage à la connexion) sur le réglage stocké. */
+function syncLoginItemSettings(): void {
+  const enabled = getLaunchAtStartup()
+  app.setLoginItemSettings({
+    openAtLogin: enabled,
+    args: enabled ? ['--hidden'] : []
+  })
+}
+
+function createWindow(startHidden: boolean): void {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -25,7 +83,21 @@ function createWindow(): void {
     }
   })
 
-  mainWindow.on('ready-to-show', () => mainWindow?.show())
+  mainWindow.on('ready-to-show', () => {
+    if (!startHidden) mainWindow?.show()
+  })
+
+  // Lancement en tâche de fond (démarrage OS) : referme la fenêtre dans la
+  // barre système au lieu de quitter, pour laisser tourner le scheduler.
+  // Si aucune icône de tray n'a pu être créée, on quitte proprement plutôt
+  // que de laisser une fenêtre invisible et impossible à rouvrir.
+  mainWindow.on('close', (e) => {
+    if (isQuitting) return
+    if (tray) {
+      e.preventDefault()
+      mainWindow?.hide()
+    }
+  })
 
   if (is.dev) {
     // Remonte les logs du renderer dans le terminal pendant le dev.
@@ -80,11 +152,33 @@ app.whenReady().then(() => {
 
   initDb()
   registerIpc()
-  createWindow()
+  syncLoginItemSettings()
+
+  const launchedHidden = process.argv.includes('--hidden')
+  if (getLaunchAtStartup()) createTray()
+  createWindow(launchedHidden && !!tray)
   startScheduler()
 
+  // Rafraîchit les tokens de tous les comptes à chaque lancement (l'app
+  // n'utilise autrement le refresh_token qu'au moment d'un appel API — sans
+  // ça, un compte inutilisé pendant longtemps risque de finir avec un
+  // refresh_token expiré côté Google).
+  refreshAllAccountTokens().catch(() => null)
+
+  ipcMain.handle('settings:setLaunchAtStartup', (_, enabled: boolean) => {
+    setLaunchAtStartup(enabled)
+    syncLoginItemSettings()
+    if (enabled && !tray) createTray()
+    else if (!enabled && tray) {
+      tray.destroy()
+      tray = null
+    }
+    return getPublicSettings()
+  })
+
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) createWindow(false)
+    else mainWindow?.show()
   })
 
   if (app.isPackaged) {
@@ -103,6 +197,13 @@ app.whenReady().then(() => {
       }
     }, 8000)
   }
+})
+
+// Toute tentative de quitter l'app (Cmd+Q, fermeture OS, menu système...) doit
+// vraiment fermer, même avec un tray actif — seul mainWindow.close() doit
+// masquer la fenêtre au lieu de quitter.
+app.on('before-quit', () => {
+  isQuitting = true
 })
 
 app.on('window-all-closed', () => {
