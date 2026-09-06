@@ -13,12 +13,14 @@ import {
   ExternalLink,
   Cloud,
   X,
-  CheckSquare
+  CheckSquare,
+  Loader2
 } from 'lucide-react'
 import { useStore } from '../store'
 import ContextMenu from '../components/ContextMenu'
 import FileInfoModal from '../components/FileInfoModal'
 import ShareModal from '../components/ShareModal'
+import ProgressBar from '../components/ProgressBar'
 import {
   formatBytes,
   formatRelative,
@@ -54,7 +56,14 @@ export default function FilesView({ folderId }: Props): JSX.Element {
   const [menu, setMenu] = useState<{ x: number; y: number; file: FileMeta } | null>(null)
   const [infoFile, setInfoFile] = useState<FileMeta | null>(null)
   const [shareFile, setShareFile] = useState<FileMeta | null>(null)
-  const [bulkDeleting, setBulkDeleting] = useState(false)
+  // Ids en cours de suppression (animation par ligne) + progression globale de
+  // l'action groupée en cours (barre "X / Y" dans la barre d'outils).
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
+  const [bulkProgress, setBulkProgress] = useState<{
+    action: 'delete' | 'upload'
+    done: number
+    total: number
+  } | null>(null)
   // Dernière ligne cliquée : sert de point de départ pour la sélection par plage (Shift+clic).
   const lastClickedId = useRef<string | null>(null)
 
@@ -139,7 +148,8 @@ export default function FilesView({ folderId }: Props): JSX.Element {
       )
     )
       return
-    setBulkDeleting(true)
+    setDeletingIds(new Set(ids))
+    setBulkProgress({ action: 'delete', done: 0, total: ids.length })
     let ok = 0
     let failed = 0
     for (const id of ids) {
@@ -149,10 +159,16 @@ export default function FilesView({ folderId }: Props): JSX.Element {
       } catch {
         failed++
       }
+      setBulkProgress((p) => (p ? { ...p, done: p.done + 1 } : p))
+      setDeletingIds((s) => {
+        const n = new Set(s)
+        n.delete(id)
+        return n
+      })
     }
     await Promise.all([loadFiles(), loadFolders(), loadDashboard()])
     setSelected(new Set())
-    setBulkDeleting(false)
+    setBulkProgress(null)
     toast(
       `${ok} fichier(s) supprimé(s)` + (failed ? ` · ${failed} en échec` : ''),
       failed ? 'error' : 'success'
@@ -160,6 +176,7 @@ export default function FilesView({ folderId }: Props): JSX.Element {
   }
 
   async function pickUpload(): Promise<void> {
+    setBulkProgress({ action: 'upload', done: 0, total: 0 })
     try {
       const res = await window.api.files.pickAndUpload()
       if (res.length) {
@@ -171,6 +188,8 @@ export default function FilesView({ folderId }: Props): JSX.Element {
       }
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Échec upload', 'error')
+    } finally {
+      setBulkProgress(null)
     }
   }
 
@@ -185,12 +204,19 @@ export default function FilesView({ folderId }: Props): JSX.Element {
 
   async function del(f: FileMeta): Promise<void> {
     if (!window.confirm(`Supprimer « ${f.originalFilename} » de Google Drive ? Irréversible.`)) return
+    setDeletingIds((s) => new Set(s).add(f.id))
     try {
       await window.api.files.delete(f.id)
       await Promise.all([loadFiles(), loadFolders(), loadDashboard()])
       toast('Fichier supprimé', 'success')
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Échec suppression', 'error')
+    } finally {
+      setDeletingIds((s) => {
+        const n = new Set(s)
+        n.delete(f.id)
+        return n
+      })
     }
   }
 
@@ -231,7 +257,28 @@ export default function FilesView({ folderId }: Props): JSX.Element {
           </span>
         </div>
         <div className="page-header-right">
-          {selected.size > 0 && (
+          {bulkProgress?.action === 'delete' && (
+            <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+              <Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite', color: 'var(--danger)' }} />
+              <span className="muted" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                Suppression {bulkProgress.done}/{bulkProgress.total}…
+              </span>
+              <ProgressBar
+                ratio={bulkProgress.total ? bulkProgress.done / bulkProgress.total : 0}
+                variant="accent"
+                height={4}
+              />
+            </div>
+          )}
+          {bulkProgress?.action === 'upload' && (
+            <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+              <Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite', color: 'var(--accent)' }} />
+              <span className="muted" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                Envoi en cours…
+              </span>
+            </div>
+          )}
+          {!bulkProgress && selected.size > 0 && (
             <>
               <span className="muted" style={{ fontSize: 12 }}>
                 {selected.size} sélectionné(s)
@@ -245,16 +292,12 @@ export default function FilesView({ folderId }: Props): JSX.Element {
               <button className="btn btn-sm btn-secondary" onClick={() => exportSelected(true)}>
                 <FileArchive size={13} /> ZIP
               </button>
-              <button
-                className="btn btn-sm btn-danger"
-                onClick={deleteSelected}
-                disabled={bulkDeleting}
-              >
+              <button className="btn btn-sm btn-danger" onClick={deleteSelected}>
                 <Trash2 size={13} /> Supprimer ({selected.size})
               </button>
             </>
           )}
-          {rows.length > 0 && selected.size === 0 && (
+          {!bulkProgress && rows.length > 0 && selected.size === 0 && (
             <button className="btn btn-sm btn-secondary" onClick={selectAll}>
               <CheckSquare size={13} /> Tout sélectionner
             </button>
@@ -262,13 +305,13 @@ export default function FilesView({ folderId }: Props): JSX.Element {
           <button
             className="btn btn-sm btn-secondary"
             onClick={scan}
-            disabled={scanning || accounts.length === 0}
+            disabled={scanning || !!bulkProgress || accounts.length === 0}
             data-tooltip="Scanner le contenu réel de chaque Drive"
           >
             <RefreshCw size={13} style={scanning ? { animation: 'spin 0.7s linear infinite' } : undefined} />
             {scanning ? `Scan… ${scanCount || ''}` : 'Actualiser'}
           </button>
-          <button className="btn btn-primary" onClick={pickUpload}>
+          <button className="btn btn-primary" onClick={pickUpload} disabled={!!bulkProgress}>
             <Upload size={15} /> Ajouter
           </button>
         </div>
@@ -360,25 +403,37 @@ export default function FilesView({ folderId }: Props): JSX.Element {
                 {rows.map((f) => {
                   const accIndex = accounts.findIndex((a) => a.id === f.accountId)
                   const acc = accounts[accIndex]
+                  const isDeleting = deletingIds.has(f.id)
                   return (
                     <tr
                       key={f.id}
-                      className={selected.has(f.id) ? 'row-selected' : undefined}
-                      onClick={(e) => onRowClick(f.id, e)}
+                      className={
+                        [selected.has(f.id) && 'row-selected', isDeleting && 'row-deleting']
+                          .filter(Boolean)
+                          .join(' ') || undefined
+                      }
+                      onClick={(e) => !isDeleting && onRowClick(f.id, e)}
                       onContextMenu={(e) => {
                         e.preventDefault()
-                        setMenu({ x: e.clientX, y: e.clientY, file: f })
+                        if (!isDeleting) setMenu({ x: e.clientX, y: e.clientY, file: f })
                       }}
-                      style={{ cursor: 'pointer' }}
+                      style={{ cursor: isDeleting ? 'default' : 'pointer' }}
                     >
                       <td>
-                        <input
-                          type="checkbox"
-                          className="checkbox"
-                          checked={selected.has(f.id)}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={() => toggle(f.id)}
-                        />
+                        {isDeleting ? (
+                          <Loader2
+                            size={14}
+                            style={{ animation: 'spin 0.7s linear infinite', color: 'var(--danger)' }}
+                          />
+                        ) : (
+                          <input
+                            type="checkbox"
+                            className="checkbox"
+                            checked={selected.has(f.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={() => toggle(f.id)}
+                          />
+                        )}
                       </td>
                       <td>
                         <div className="cell-name">
@@ -436,6 +491,7 @@ export default function FilesView({ folderId }: Props): JSX.Element {
                               e.stopPropagation()
                               download(f)
                             }}
+                            disabled={isDeleting}
                             data-tooltip="Télécharger"
                           >
                             <Download size={14} />
@@ -447,6 +503,7 @@ export default function FilesView({ folderId }: Props): JSX.Element {
                               const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
                               setMenu({ x: r.left, y: r.bottom, file: f })
                             }}
+                            disabled={isDeleting}
                           >
                             <MoreVertical size={14} />
                           </button>
