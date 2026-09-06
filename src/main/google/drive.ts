@@ -48,7 +48,11 @@ export async function listFiles(
   do {
     const res = await withRetry(() =>
       drive.files.list({
-        q: "trashed = false and mimeType != 'application/vnd.google-apps.folder'",
+        // 'me' in owners : sans ça, le corpus par défaut de l'API ('user')
+        // inclut aussi "Partagé avec moi" — des fichiers qu'on peut lister
+        // mais jamais supprimer (on n'en est pas propriétaire), d'où des
+        // échecs 403 systématiques au moment de la suppression.
+        q: "trashed = false and mimeType != 'application/vnd.google-apps.folder' and 'me' in owners",
         spaces: 'drive',
         fields:
           'nextPageToken, files(id, name, size, mimeType, md5Checksum, modifiedTime, webViewLink)',
