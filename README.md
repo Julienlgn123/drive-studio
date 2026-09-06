@@ -29,43 +29,17 @@ et export ZIP.
 
 ---
 
-## Démarrage
+## Installation
 
-```bash
-npm install          # installe + recompile better-sqlite3 pour Electron
-npm run dev           # lance l'app en mode développement
-```
+Drive Studio s'installe et se met à jour directement depuis
+[**Open Studio**](https://github.com/Julienlgn123/open-studio) : télécharge sa
+dernière release, puis choisis Drive Studio dans son catalogue — téléchargement,
+installation et mises à jour se font depuis là, en un clic.
 
-Build & packaging :
-
-```bash
-npm run build         # compile main + preload + renderer dans out/
-npm run typecheck     # vérifie les types (main + renderer)
-npm run dist          # installeur Windows (nsis + portable) -> dist-installer/
-npm run dist:mac      # dmg
-npm run dist:linux    # AppImage + deb
-```
-
-> Avant `npm run dist`, place `resources/icon.ico` (Windows) et `resources/icon.png`
-> (512×512, macOS/Linux).
-
-### Builds multi-plateformes (CI)
-
-Un workflow GitHub Actions (`.github/workflows/release.yml`) compile automatiquement
-l'app sur les trois OS à chaque tag `v*` (ou manuellement via *Actions → Run workflow*) :
-
-- **Windows** (`nsis` + portable, x64) sur un runner `windows-latest`.
-- **macOS** (`dmg` + `zip`, **x64 et arm64**) sur un runner `macos-latest` — ce runner
-  est lui-même en Apple Silicon, donc le build arm64 est **compilé nativement**
-  (y compris le module natif `better-sqlite3`), aucune traduction Rosetta n'entre en jeu.
-- **Linux** (`AppImage` + `deb`, x64) sur `ubuntu-latest`.
-
-Sur un tag, les artefacts sont publiés automatiquement en *GitHub Release*.
-
-> **Apps non signées** : sans certificat développeur (payant), macOS affichera un
+> **App non signée** : sans certificat développeur (payant), macOS affichera un
 > avertissement Gatekeeper (« app endommagée / éditeur non identifié ») et Windows un
 > avertissement SmartScreen à la première ouverture. C'est normal pour un build indé ;
-> sur Mac, clic droit → *Ouvrir* (ou `xattr -cr /Applications/Drive\ Backup\ Manager.app`)
+> sur Mac, clic droit → *Ouvrir* (ou `xattr -cr /Applications/Drive\ Studio.app`)
 > lève le blocage.
 
 ---
