@@ -13,9 +13,9 @@
     "start": "electron-vite dev",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "postinstall": "electron-builder install-app-deps",
-    "dist": "electron-vite build && electron-builder --win",
-    "dist:mac": "electron-vite build && electron-builder --mac",
-    "dist:linux": "electron-vite build && electron-builder --linux"
+    "dist": "electron-vite build && electron-builder --win --publish never",
+    "dist:mac": "electron-vite build && electron-builder --mac --publish never",
+    "dist:linux": "electron-vite build && electron-builder --linux --publish never"
   },
   "build": {
     "appId": "com.gdrive-backup-manager.app",
@@ -52,7 +52,10 @@
       "artifactName": "Drive-Backup-Manager-Portable-${version}.exe"
     },
     "mac": {
-      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }],
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
+      ],
       "icon": "resources/icon.png",
       "category": "public.app-category.utilities"
     },
@@ -73,7 +76,11 @@
     "deb": {
       "artifactName": "Drive-Backup-Manager-${version}.deb"
     },
-    "publish": null
+    "publish": {
+      "provider": "github",
+      "owner": "Julienlgn123",
+      "repo": "stockage-studio"
+    }
   },
   "dependencies": {
     "better-sqlite3": "^11.10.0",

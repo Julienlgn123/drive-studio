@@ -42,6 +42,25 @@ npm run dist:linux    # AppImage + deb
 > Avant `npm run dist`, place `resources/icon.ico` (Windows) et `resources/icon.png`
 > (512×512, macOS/Linux).
 
+### Builds multi-plateformes (CI)
+
+Un workflow GitHub Actions (`.github/workflows/build.yml`) compile automatiquement
+l'app sur les trois OS à chaque tag `v*` (ou manuellement via *Actions → Run workflow*) :
+
+- **Windows** (`nsis` + portable, x64) sur un runner `windows-latest`.
+- **macOS** (`dmg` + `zip`, **x64 et arm64**) sur un runner `macos-latest` — ce runner
+  est lui-même en Apple Silicon, donc le build arm64 est **compilé nativement**
+  (y compris le module natif `better-sqlite3`), aucune traduction Rosetta n'entre en jeu.
+- **Linux** (`AppImage` + `deb`, x64) sur `ubuntu-latest`.
+
+Sur un tag, les artefacts sont publiés automatiquement en *GitHub Release*.
+
+> **Apps non signées** : sans certificat développeur (payant), macOS affichera un
+> avertissement Gatekeeper (« app endommagée / éditeur non identifié ») et Windows un
+> avertissement SmartScreen à la première ouverture. C'est normal pour un build indé ;
+> sur Mac, clic droit → *Ouvrir* (ou `xattr -cr /Applications/Drive\ Backup\ Manager.app`)
+> lève le blocage.
+
 ---
 
 ## Configuration Google (obligatoire au premier lancement)
