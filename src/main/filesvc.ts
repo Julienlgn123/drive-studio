@@ -25,6 +25,7 @@ import {
 import { pickBestPrimary } from './distribution'
 import { syncAccountQuota } from './google/accounts'
 import { emitTransfer } from './events'
+import { mapDriveError } from './google/errors'
 import type { FileMeta, ShareRole } from '@shared/types'
 
 /** Upload d'un fichier local : choisit le meilleur compte principal puis envoie. */
@@ -109,7 +110,7 @@ export async function uploadLocalFile(localPath: string): Promise<FileMeta> {
     await syncAccountQuota(account.id).catch(() => null)
     return meta
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
+    const msg = mapDriveError(err)
     emitTransfer({
       id: transferId,
       kind: 'upload',
@@ -127,7 +128,7 @@ export async function uploadLocalFile(localPath: string): Promise<FileMeta> {
       label: name,
       errorDetails: msg
     })
-    throw err
+    throw new Error(msg)
   }
 }
 
@@ -208,7 +209,7 @@ export async function downloadToDisk(
     shell.showItemInFolder(destPath)
     return { path: destPath, verified }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
+    const msg = mapDriveError(err)
     emitTransfer({
       id: transferId,
       kind: 'download',
@@ -227,7 +228,7 @@ export async function downloadToDisk(
       label: file.originalFilename,
       errorDetails: msg
     })
-    throw err
+    throw new Error(msg)
   }
 }
 
@@ -238,15 +239,16 @@ export async function deleteFileEverywhere(fileId: string): Promise<void> {
   try {
     await driveDelete(file.accountId, file.driveFileId)
   } catch (err) {
+    const msg = mapDriveError(err)
     addLog({
       action: 'delete',
       accountId: file.accountId,
       fileId: file.id,
       status: 'failed',
       label: file.originalFilename,
-      errorDetails: err instanceof Error ? err.message : String(err)
+      errorDetails: msg
     })
-    throw err
+    throw new Error(msg)
   }
   deleteFileMeta(fileId)
   addLog({
@@ -264,7 +266,22 @@ export async function shareFileLink(fileId: string, role: ShareRole): Promise<st
   const existing = getSharedLinkForFile(fileId)
   if (existing) return existing.url
 
-  const { permissionId, url } = await shareFile(file.accountId, file.driveFileId, role)
+  let permissionId: string
+  let url: string
+  try {
+    ;({ permissionId, url } = await shareFile(file.accountId, file.driveFileId, role))
+  } catch (err) {
+    const msg = mapDriveError(err)
+    addLog({
+      action: 'share',
+      accountId: file.accountId,
+      fileId,
+      status: 'failed',
+      label: file.originalFilename,
+      errorDetails: msg
+    })
+    throw new Error(msg)
+  }
   createSharedLink({ fileId, drivePermissionId: permissionId, url, role })
   addLog({
     action: 'share',

@@ -14,6 +14,7 @@ import {
   updateFileMeta
 } from '../db'
 import { getQuota, listFiles } from './drive'
+import { mapDriveError } from './errors'
 import { revokeAccount, runOAuthFlow, getAuthedClient } from './oauth'
 import { broadcast } from '../events'
 import type { Account, AccountRole } from '@shared/types'
@@ -164,15 +165,16 @@ export async function syncAccountQuota(accountId: string): Promise<Account> {
       status: 'active'
     })
   } catch (err) {
+    const msg = mapDriveError(err)
     updateAccount(accountId, { status: 'error' })
     addLog({
       action: 'backup',
       accountId,
       status: 'failed',
       label: 'sync quota',
-      errorDetails: err instanceof Error ? err.message : String(err)
+      errorDetails: msg
     })
-    throw err
+    throw new Error(msg)
   }
   return getAccount(accountId)!
 }

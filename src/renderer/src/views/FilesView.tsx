@@ -152,12 +152,14 @@ export default function FilesView({ folderId }: Props): JSX.Element {
     setBulkProgress({ action: 'delete', done: 0, total: ids.length })
     let ok = 0
     let failed = 0
+    let lastError: string | null = null
     for (const id of ids) {
       try {
         await window.api.files.delete(id)
         ok++
-      } catch {
+      } catch (err) {
         failed++
+        lastError = err instanceof Error ? err.message : String(err)
       }
       setBulkProgress((p) => (p ? { ...p, done: p.done + 1 } : p))
       setDeletingIds((s) => {
@@ -170,7 +172,8 @@ export default function FilesView({ folderId }: Props): JSX.Element {
     setSelected(new Set())
     setBulkProgress(null)
     toast(
-      `${ok} fichier(s) supprimé(s)` + (failed ? ` · ${failed} en échec` : ''),
+      `${ok} fichier(s) supprimé(s)` +
+        (failed ? ` · ${failed} en échec : ${lastError}` : ''),
       failed ? 'error' : 'success'
     )
   }
