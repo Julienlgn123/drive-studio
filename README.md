@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Julienlgn123/stockage-studio/main/banner.png" alt="Drive Studio" width="100%" />
+  <img src="https://raw.githubusercontent.com/Julienlgn123/drive-studio/main/banner.png" alt="Drive Studio" width="100%" />
 </p>
 
 Application desktop (Electron + React + TypeScript) qui centralise plusieurs comptes
