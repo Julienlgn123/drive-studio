@@ -1,4 +1,8 @@
-# Drive Studio
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Julienlgn123/stockage-studio/main/resources/icon.png" width="96" height="96" alt="Drive Studio" />
+</p>
+
+<h1 align="center">Drive Studio</h1>
 
 Application desktop (Electron + React + TypeScript) qui centralise plusieurs comptes
 Google Drive en un seul endroit : vue unifiée des fichiers, **distribution automatique**
@@ -7,6 +11,11 @@ de redondance, dashboard avec graphiques, dossiers virtuels, partage de liens, v
 et export ZIP.
 
 100 % local : SQLite embarqué + API Google Drive. Aucun serveur cloud.
+
+> 📦 Fait partie de la suite [**Open Studio**](https://github.com/Julienlgn123/open-studio) —
+> pas besoin de télécharger l'installateur ici : installe Open Studio une seule fois, et
+> Drive Studio (comme les autres outils de la suite) devient téléchargeable et lançable
+> directement depuis son catalogue.
 
 ---
 
