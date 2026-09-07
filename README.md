@@ -36,11 +36,23 @@ Drive Studio s'installe et se met à jour directement depuis
 dernière release, puis choisis Drive Studio dans son catalogue — téléchargement,
 installation et mises à jour se font depuis là, en un clic.
 
-> **App non signée** : sans certificat développeur (payant), macOS affichera un
-> avertissement Gatekeeper (« app endommagée / éditeur non identifié ») et Windows un
-> avertissement SmartScreen à la première ouverture. C'est normal pour un build indé ;
-> sur Mac, clic droit → *Ouvrir* (ou `xattr -cr /Applications/Drive\ Studio.app`)
-> lève le blocage.
+> **macOS uniquement** : Drive Studio n'a pas de certificat Apple Developer
+> payant, la build n'est donc signée qu'en *ad-hoc*. Au premier lancement,
+> macOS affiche **« Drive Studio est endommagée et ne peut pas être
+> ouverte »** (le clic droit → Ouvrir ne suffit pas ici, contrairement à
+> une app juste non-notariée). Pour débloquer :
+> 1. Glisse `Drive Studio.app` dans `/Applications` depuis le `.dmg`
+>    (obligatoire : le volume monté est en lecture seule).
+> 2. Puis soit :
+>    - double-clique `Fix-macOS-Signature.command` présent dans le `.dmg`, ou
+>    - ouvre Terminal et lance :
+>      ```bash
+>      xattr -cr "/Applications/Drive Studio.app"
+>      ```
+>
+> Windows affichera aussi un avertissement SmartScreen à la première
+> ouverture (« Éditeur non identifié ») — c'est normal pour un build indé,
+> clique *Informations complémentaires → Exécuter quand même*.
 
 ---
 
