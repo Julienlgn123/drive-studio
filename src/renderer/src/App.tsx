@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar'
 import ToastStack from './components/Toast'
 import TransfersPanel from './components/TransfersPanel'
 import Onboarding from './components/Onboarding'
+import ReconnectBanner from './components/ReconnectBanner'
 import DashboardView from './views/DashboardView'
 import FilesView from './views/FilesView'
 import AccountsView from './views/AccountsView'
@@ -190,6 +191,7 @@ export default function App(): JSX.Element {
   return (
     <div className="app">
       <TitleBar />
+      <ReconnectBanner />
       <div className="app-body">
         <Sidebar />
         <main className="main">
